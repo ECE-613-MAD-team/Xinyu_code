@@ -13,6 +13,12 @@ a3.jpg - initial image
 
 a4/a5 Best MSE/Worst MSE.Hold Gatys network.
 
+    initial: pebbles.jpg
+          a1
+           | 
+    a4 -- a3 -- a5
+           |
+          a2
 
 -initial image generate by sgan4 network.(paper:Texture Synthesis with Spatial Generative Adversarial Networks)
 
@@ -31,3 +37,18 @@ need more initial images(apart form gaussian noise and image generate by sgan4)
 Maybe design a new quality metric.
 
 Maybe utilize some interesting points get from MAD comparison.
+
+# Models going to compare:
+
+* MSE
+* SSIM
+* WHAT DOES IT TAKE TO GENERATE NATURAL TEXTURES (gram-matrix + one-layer-net)
+* gram-matrix + VGG (conv5)
+* Different layers? (Maybe)
+
+
+
+# Mdels comparison results:
+
+### Gram-matrix + VGG VS MSE
+
