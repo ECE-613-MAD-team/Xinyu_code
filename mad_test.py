@@ -263,7 +263,8 @@ def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None):
     
     #print('g_1n_prime', g_1n_prime.max(), g_1n_prime.min(), torch.mean(torch.abs(g_1n_prime)))
     comp = torch.abs(y_n_prime_loss - y_n_loss)
-    print('comp',comp) # current loss error for the holding method
+    first_comp = comp
+    print('comp', comp) # current loss error for the holding method
     
     y_n1 = y_n_prime
     for i,v in enumerate(vsearch):
@@ -281,7 +282,7 @@ def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None):
             if tep_comp < 0.01:
                 break
         # else do not renew yn, just reduce v        
-    return y_n1, comp
+    return y_n1, first_comp
 
 # load images
 ref_img = image_loader("./data/texture/pebbles.jpg")
@@ -341,12 +342,18 @@ for i in range(iterations):
         torch.save(y,'temp.pt')  
         break
     
-    if i % 10 == 0:
-        print('iterate: ' + str(i))
-        plt.figure()
-        imshow(torch.clamp(y,0,1))
+    # if i % 10 == 0:
+    #     print('iterate: ' + str(i))
+    #     plt.figure()
+    #     imshow(torch.clamp(y,0,1))
         
     input_img = y
+    if comp < 5e-5:
+        print('iterate: ' + str(i))
+        print('comp: ' + str(comp))
+        plt.figure()
+        imshow(torch.clamp(y, 0, 1))
+        break
 
 torch.save(input_img, 'pebbles_noise_1.pt')
 plt.figure()
