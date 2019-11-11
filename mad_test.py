@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import pytorch_ssim
+from torch.autograd import Variable
 
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -9,12 +11,19 @@ import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 import torchvision.models as models
 
+from math import exp
 import numpy as np
 import copy
 import cv2
 
 # TODO: using constant to control type
+weight_mse = 2e4
+weight_gram = 1e5
+weight_ssim = 2e2
 
+einstein = 'einstein'
+pebbles = 'pebble'
+image_tag = einstein
 
 """
 
@@ -30,7 +39,7 @@ red-peppers.jpg
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 imsize = 256
-nc = 3
+nc = 1
 
 loader = transforms.Compose([
     transforms.Resize(imsize),  # scale imported image
@@ -116,7 +125,8 @@ texture network
 """
 
 #content_layers_default = ['conv_4']
-style_layers_default = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
+style_layers_default = ['conv_1','pool_2', 'pool_4', 'pool_8', 'pool_12']
+#style_layers_default = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
 
 def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
                                style_img, 
@@ -198,7 +208,7 @@ def imshow(tensor, title=None):
     plt.imshow(image)
     if title is not None:
         plt.title(title)
-    plt.savefig('pebbles_noise_1.jpg',dpi = 300)
+    plt.savefig(image_tag+'_result.jpg',dpi = 300)
     plt.show()
 
 def imshow1(tensor, title=None):
@@ -206,17 +216,17 @@ def imshow1(tensor, title=None):
     image = tensor.cpu().clone()  # we clone the tensor to not do changes on it
     image = image.squeeze(0)      # remove the fake batch dimension
     image = unloader(image)
-    plt.imshow(image)
+    plt.imshow(image, cmap='gray')
     if title is not None:
         plt.title(title)
-    plt.savefig('pebbles_noise_3.jpg', dpi = 300)
+    plt.savefig(image_tag+'_origin.jpg', dpi = 300)
     plt.show()
 # plt.figure()
 # imshow(ref_img, title='reference texture')
 
 def model_gram(model, img, losses):
     
-    weight = 1e5 # control the gradient
+    weight = weight_gram = 1e5 # control the gradient
     img.requires_grad_()
     model(img)
     
@@ -228,7 +238,8 @@ def model_gram(model, img, losses):
     return style_score, img.grad.flatten()
 
 def mse(img, ref):
-    weight = 2e3
+    # MSR loss
+    weight = weight_mse
     
     img.requires_grad_()
     
@@ -237,6 +248,16 @@ def mse(img, ref):
     loss.backward()
 
     return loss, img.grad.flatten()
+
+def ssim(img, ref):
+    img.requires_grad_()
+    
+    ssim_value = pytorch_ssim.ssim(ref, img)
+    ssim_loss = pytorch_ssim.SSIM(window_size=11)
+    ssim_out = -weight_ssim * ssim_loss(ref, img)
+    ssim_out.backward()
+    
+    return ssim_value, img.grad.flatten()
 
 def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None):
     # mad hold loss
@@ -251,9 +272,9 @@ def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None):
     # plt.show()
     # print('g_n: ', g_n.max(), g_n.min(), torch.mean(torch.abs(g_n)))
 
-    y_n_prime = torch.sub(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
-    # use sub when gradient reduce
-    # xm = torch.add(img.flatten(), torch.mul(lamda, gm)).reshape(1,nc,imsize,imsize)
+    #y_n_prime = torch.sub(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
+    y_n_prime = torch.add(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
+    # sub or add depends on the maximal or minimal opt goal
     print('y_n_prime - y_n: ', (y_n_prime - y_n).sum() )
     
     y_n_loss, _ = mkeep(y_n.detach(), ref.detach())
@@ -279,81 +300,99 @@ def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None):
             # v is correct
             comp = tep_comp
             y_n1 = tep_img
-            if tep_comp < 0.01:
+            if tep_comp < 0.001:
                 break
         # else do not renew yn, just reduce v        
     return y_n1, first_comp
 
-# load images
-ref_img = image_loader("./data/texture/pebbles.jpg")
+if __name__ == "__main__":
+    
+    # load images
+    ref_img = image_loader("./pic_src/"+image_tag+".png")
 
-k = 9
-ref = ref_img.detach()
-noise = torch.randn(1, nc, imsize, imsize) * torch.sqrt( (torch.tensor([2.0])**k) ) / torch.tensor(255.0) 
-imgn = ref + noise.to(device)
-imgn = torch.clamp(imgn, 0, 1)
+    # k = 8
+    # ref = ref_img.detach()
+    # noise = torch.randn(1, nc, imsize, imsize) * torch.sqrt( (torch.tensor([2.0])**k) ) / torch.tensor(255.0) 
+    # imgn = (ref+noise.to(device)) / 255
+    # imgn = torch.clamp(imgn, 0, 1)
 
-"""
+    # m = 128
+    # ref_img = ref_img[:,:,32:32+m,32:32+m]
+    #print(ref_img.shape)
+    k = 8
+    ref = ref_img * 255
+    noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
+    #noise = torch.randn(1,nc,m,m)*torch.sqrt((torch.tensor([2.0])**k)) 
+    print(ref.shape)
+    print(noise.to(device).shape)
+    imgn = (ref+noise.to(device)) / 255
+    imgn = torch.clamp(imgn,0,1)
 
-Gaussian
-Blur
-sgan4
-jpeg
+    print(ref.detach().shape)
 
-"""
-plt.figure()
-imshow1(imgn, title='distorted image')
+    """
 
-model_style, style_losses = get_style_model_and_losses(cnn, cnn_normalization_mean, cnn_normalization_std, ref_img)
-print('model load success!')
+    Gaussian
+    Blur
+    sgan4
+    jpeg
 
-imgn.data.clamp_(0,1) # transition from [0,255] -> (0,1)?
-input_img = imgn.detach()
-ref = ref_img.detach()
-cu = 0
+    """
+    plt.figure()
+    imshow1(imgn, title='distorted image')
 
-# mad search find the maximal / minimal
-iterations = 100
-for i in range(iterations):
-    
-    #loss1, g1 = model_gram(model_style, input_img.detach(), style_losses)
-    loss1, g1 = mse(input_img.detach(), ref.detach())
-    
-    # print('loss1',loss1)
-    # plt.hist(g1.cpu(),1000)
-    # plt.show()
-    # print('g1',g1.max(),g1.min(),torch.mean(torch.abs(g1)))
-    
-    #loss2, g2 = mse(input_img.detach(), ref.detach())
-    loss2, g2 = model_gram(model_style, input_img.detach(), style_losses)
-    
-    # print('\n\n\n')
-    
-    # print('loss2',loss2)
-    # plt.hist(g2.cpu(),1000)
-    # plt.show()
-    # print('g2',g2.max(),g2.min(),torch.mean(torch.abs(g2)))
-    
-    y, comp = search_grad(ref.detach(), g_2n = g2, g_1n = g1, img = input_img.detach(), mkeep = mse, lamda = 0.01)
-    
-    cu = cu + comp
-    print('cumulate comp:', cu)
-    if comp > 1:
-        torch.save(y,'temp.pt')  
-        break
-    
-    # if i % 10 == 0:
-    #     print('iterate: ' + str(i))
-    #     plt.figure()
-    #     imshow(torch.clamp(y,0,1))
+    model_style, style_losses = get_style_model_and_losses(cnn, cnn_normalization_mean, cnn_normalization_std, ref_img)
+    print('model load success!')
+    # print(model_style)
+
+    imgn.data.clamp_(0,1) # transition from [0,255] -> (0,1)?
+    input_img = imgn.detach()
+    ref = ref_img.detach()
+    cu = 0
+
+    # mad search find the maximal / minimal
+    iterations = 100
+    for i in range(iterations):
         
-    input_img = y
-    if comp < 5e-5:
-        print('iterate: ' + str(i))
-        print('comp: ' + str(comp))
-        plt.figure()
-        imshow(torch.clamp(y, 0, 1))
-        break
+        #loss1, g1 = model_gram(model_style, input_img.detach(), style_losses)
+        loss1, g1 = mse(input_img.detach(), ref.detach())
+        
+        # print('loss1',loss1)
+        # plt.hist(g1.cpu(),1000)
+        # plt.show()
+        # print('g1',g1.max(),g1.min(),torch.mean(torch.abs(g1)))
+        
+        #loss2, g2 = mse(input_img.detach(), ref.detach())
+        #loss2, g2 = model_gram(model_style, input_img.detach(), style_losses)
+        loss2, g2 = ssim(input_img.detach(), ref.detach())
+        
+        # print('\n\n\n')
+        
+        # print('loss2',loss2)
+        # plt.hist(g2.cpu(),1000)
+        # plt.show()
+        # print('g2',g2.max(),g2.min(),torch.mean(torch.abs(g2)))
+        
+        y, comp = search_grad(ref.detach(), g_2n = g2, g_1n = g1, img = input_img.detach(), mkeep = mse, lamda = 0.01)
+        
+        cu = cu + comp
+        print('cumulate comp:', cu)
+        if comp > 1:
+            torch.save(y,'temp.pt')  
+            break
+        
+        # if i % 10 == 0:
+        #     print('iterate: ' + str(i))
+        #     plt.figure()
+        #     imshow(torch.clamp(y,0,1))
+            
+        input_img = y
+        if comp < 5e-5:
+            print('iterate: ' + str(i))
+            print('comp: ' + str(comp))
+            plt.figure()
+            imshow(torch.clamp(y, 0, 1))
+            break
 
-torch.save(input_img, 'pebbles_noise_1.pt')
-plt.figure()
+    # torch.save(input_img, 'pebbles_noise_1.pt')
+    # plt.figure()
