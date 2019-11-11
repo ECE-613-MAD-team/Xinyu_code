@@ -39,9 +39,15 @@ nc = 1
 
 cu = 0
 iterations = 1000
-lamda = 0.2
+lamda = 0.8
 
+beta_1 = 0.9
+beta_2 = 0.999
+epsilon = 1e-8
 
+theta_0 = 0
+m_t = 0 
+v_t = 0 
 
 loader = transforms.Compose([
     transforms.Resize(imsize),  # scale imported image
@@ -126,7 +132,6 @@ ref = ref_img * 255
 #noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
 noise = torch.randn(1,nc,m,m)*torch.sqrt((torch.tensor([2.0])**k)) 
 imgn = (ref+noise.to(device)) / 255
-imgn = imgn[:,:,32:32+m,32:32+m]
 imgn = torch.clamp(imgn,0,1)
 
 
@@ -147,8 +152,9 @@ input_img = imgn.detach()
 ref = ref_img.detach()
 
 for i in range(iterations):
-    if i%10 == 0:
-        lamda = lamda*0.8
+#    if i%50 == 0:
+#        lamda = lamda*0.9
+
     #loss1, g1 = model_gram(model_style, input_img.detach(), style_losses)
     #loss1, g1 = mse(input_img.detach(), ref.detach())
     loss1, g1 = mse(input_img.detach(), ref.detach())
@@ -182,8 +188,14 @@ for i in range(iterations):
     
     if i%10 == 0:
         print('lamda:', lamda)
-    g_prev = g2
-    y, comp = search_grad(ref.detach(), g = g2, gkeep = g1, img = input_img.detach(), mkeep = mse, mkeep_opt = mse_opt, lamda = lamda)
+        
+    m_t = beta_1*m_t + (1-beta_1)*g2     # consider 90% of previous, and 10% of current
+    v_t = beta_2*v_t + (1-beta_2)*(g2*g2) # 99.9% of previous (square grad), and 1% of current
+    m_cap = m_t/(1-(beta_1**(i+1)))      #calculates the bias-corrected estimates
+    v_cap = v_t/(1-(beta_2**(i+1)))
+    gt = (m_cap)/(torch.sqrt(v_cap)+epsilon)
+    
+    y, comp = search_grad(ref.detach(), g = gt, gkeep = g1, img = input_img.detach(), mkeep = mse, mkeep_opt = mse_opt, lamda = lamda)
 
     cu = cu + comp
     
