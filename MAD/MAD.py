@@ -7,18 +7,23 @@ from PIL import Image
 import matplotlib.pyplot as plt
 
 import torchvision.transforms as transforms
-import torchvision.models as models
+
 
 import pytorch_ssim
 import numpy as np
 import copy
 import cv2
-
+import gc
 
 from models import *
 from opt import *
-"""
 
+import inspect
+from Pytorch_Memory_Utils import *
+
+import warnings
+warnings.filterwarnings("ignore")
+"""
 pebbles.jpg
 brick_wall.jpg
 lacelike.jpg
@@ -39,7 +44,7 @@ imsize = 256
 
 cu = 0
 iterations = 5000
-lamda = 0.055    
+lamda = 0.002    
 
 beta_1 = 0.9
 beta_2 = 0.999
@@ -55,9 +60,7 @@ loader = transforms.Compose([
 unloader = transforms.ToPILImage()  # reconvert into PIL image
 
 
-cnn_normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
-cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
-cnn = models.vgg19(pretrained=True).features.to(device).eval()
+
 
 
 
@@ -86,7 +89,7 @@ def imshow(tensor, title=None):
     plt.imshow(image)
     if title is not None:
         plt.title(title)
-    #plt.savefig('pebbles_noise_2.jpg',dpi = 300)
+    plt.savefig('pebbles_noise8_1.jpg',dpi = 300)
     plt.show()
 
     
@@ -98,7 +101,7 @@ def imshow1(tensor, title=None):
     plt.imshow(image)
     if title is not None:
         plt.title(title)
-    #plt.savefig('pebbles_noise_3.jpg',dpi = 300)
+    #plt.savefig('pebbles_noise8_3.jpg',dpi = 300)
     plt.show()
 # plt.figure()
 # imshow(ref_img, title='reference texture')
@@ -146,21 +149,35 @@ imgn = torch.clamp(imgn,0,1)
 model_style, style_losses = get_style_model_and_losses(cnn,
           cnn_normalization_mean, cnn_normalization_std, ref_img)
 
-print(model_style)
+#print(model_style)
 
 imgn.data.clamp_(0,1)
 input_img = imgn.detach()
 ref = ref_img.detach()
 
+frame = inspect.currentframe()          # define a frame to track
+gpu_tracker = MemTracker(frame) 
 for i in range(iterations):
 #    if i%50 == 0:
 #        lamda = lamda*0.9
 
+#    if loss2 < 30000:
+#        lamda = lamda*0.998
+#    else:
+#        lamda = lamda*0.940
+    
+    if loss2 > 10:
+        lamda = lamda*0.998
+    else:
+        lamda = lamda*0.940
     #loss1, g1 = model_gram(model_style, input_img.detach(), style_losses)
+    
+    gpu_tracker.track()
     loss1, g1 = mse(input_img.detach(), ref.detach())
+    
     #loss1, g1 =ssim(input_img.detach(), ref.detach())
     
-    if i%10 == 0:
+    if i%20 == 0:
         print('loss1',loss1)
         #plt.hist(g1.cpu(),1000)
         #plt.show()
@@ -168,11 +185,13 @@ for i in range(iterations):
     
 
     #loss2, g2 = mse(input_img.detach(), ref.detach())
-    loss2, g2 = model_gram(model_style, input_img.detach(), style_losses)
+    gpu_tracker.track()
+    loss2, g2 = model_gram(input_img.detach(), ref.detach())
+   
     #loss2, g2 = ssim(input_img.detach(), ref.detach())
     
     
-    if i%100 == 0:
+    if i%20 == 0:
         print('\n\n\n')
     
         print('loss2',loss2)
@@ -187,7 +206,7 @@ for i in range(iterations):
 #            lamda = lamda*0.2
     
     
-    if i%100 == 0:
+    if i%20 == 0:
         print('lamda:', lamda)
         
 #    m_t = beta_1*m_t + (1-beta_1)*g2     # consider 90% of previous, and 10% of current
@@ -195,12 +214,12 @@ for i in range(iterations):
 #    m_cap = m_t/(1-(beta_1**(i+1)))      #calculates the bias-corrected estimates
 #    v_cap = v_t/(1-(beta_2**(i+1)))
 #    gt = (m_cap)/(torch.sqrt(v_cap)+epsilon)
+    gpu_tracker.track()
+    y, comp = search_grad(ref.detach(), g = g2, gkeep = g1, img = input_img.detach(), mkeep = mse, lamda = lamda)
     
-    y, comp = search_grad(ref.detach(), g = g2, gkeep = g1, img = input_img.detach(), mkeep = mse, mkeep_opt = mse_opt, lamda = lamda)
-
     cu = cu + comp
     
-    if i %100 == 0:
+    if i %20 == 0:
         print('cumulate comp:', cu)
         plt.figure()
         imshow(torch.clamp(y,0,1))

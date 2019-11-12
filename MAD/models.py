@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import copy
 import pytorch_ssim
+import torchvision.models as models
 #content_layers_default = ['conv_4']
 #style_layers_default = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
 style_layers_default = ['conv_1','pool_2', 'pool_4', 'pool_8', 'pool_12']
@@ -12,6 +13,10 @@ weight_mse = 2e4
 weight_gram = 1e5
 weight_ssim = 2e2
 
+
+cnn_normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
+cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
+cnn = models.vgg19(pretrained=True).features.to(device).eval()
 
 class StyleLoss(nn.Module):
 
@@ -116,7 +121,7 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
             model.add_module("style_loss_{}".format(i), style_loss)
             style_losses.append(style_loss)
     
-    print(model)
+    #print(model)
     # now we trim off the layers after the last content and style losses
     for i in range(len(model) - 1, -1, -1):
 #         if isinstance(model[i], ContentLoss) or isinstance(model[i], StyleLoss):
@@ -132,14 +137,17 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
 
 
 
-def model_gram(model, img, losses):
+def model_gram(img, ref):
     
     
     img.requires_grad_()
     
-    model(img)
+    model_style, style_losses = get_style_model_and_losses(cnn,
+          cnn_normalization_mean, cnn_normalization_std, ref)
+    
+    model_style(img)
     style_score = 0
-    for sl in losses:
+    for sl in style_losses:
         style_score += weight_gram*sl.loss
     style_score.backward()
     

@@ -46,6 +46,98 @@ def Adam(m0, xm, ref, mkeep_opt):
 g: gradient at xm
 
 """
+def bisection1(f, lower, upper, g, ref, x, xm):
+
+    obj, _ = f(x, ref)
+    var = 1
+    a = lower
+    b = upper
+    m = (a+b)/2
+#    print('\n\n\n')
+#    print('range adjustment')
+#    print(f(xm+a*g,ref)[0],f(xm+m*g,ref)[0],f(xm+b*g,ref)[0])
+#    print('\n\n\n')
+    flag = 0
+    m1, _ = f(xm+a*g,ref)
+    m2, _ = f(xm+m*g,ref)
+    m3, _ = f(xm+b*g,ref)
+    while var == 1:
+       # if (f(xm+b*g,ref)[0]-obj) <= (f(xm+m*g,ref)[0]-obj) or (f(xm+m*g,ref)[0]-obj) <= (f(xm+a*g,ref)[0]-obj):
+        
+        
+        if (m3-m2) <= 0  or (m2-m1) <= 0:
+            a = m
+            m = (a+b)/2
+            m1, _ = f(xm+a*g,ref)
+            m2, _ = f(xm+m*g,ref)
+            #m3, _ = f(xm+b*g,ref)
+            if flag > 50 :
+                print('!!!!!!!!!!!')
+                break
+            else:
+                flag += 1
+                continue
+    
+        
+        
+        if (m1-obj) > 0 and (m3-obj) > 0: 
+            a = a-0.1
+            m = (a+b)/2
+            m1, _ = f(xm+a*g,ref)
+            m2, _ = f(xm+m*g,ref)
+            #m3, _ = f(xm+b*g,ref)
+            if flag > 50 :
+                print('!!!!!!!!!!!')
+                break
+            else:
+                flag += 1
+                continue
+        elif (m1-obj) < 0 and (m3-obj) < 0:
+            b = 2*b
+            m = (a+b)/2
+            #m1, _ = f(xm+a*g,ref)
+            m2, _ = f(xm+m*g,ref)
+            m3, _ = f(xm+b*g,ref)
+            if flag > 50 :
+                print('!!!!!!!!!!!')
+                break
+            else:
+                flag += 1
+                continue
+        else:
+            pass
+            
+    
+        
+        if (m3-obj) < 0 or (m1-obj) > 0:
+            continue
+        
+        
+        if (m1-obj)*(m2-obj) <= 0:
+            b = m
+            m = (a+b)/2
+            m2, _ = f(xm+m*g,ref)
+            m3, _ = f(xm+b*g,ref)
+        elif (m2-obj)*(m3-obj) <= 0:
+            a = m
+            m = (a+b)/2
+            m1, _ = f(xm+a*g,ref)
+            m2, _ = f(xm+m*g,ref)
+        elif flag > 50 :
+            print('!!!!!!!!!!!')
+            #print('temp comp:',f(xm+m*g,ref)[0]-obj )
+            break
+        else:
+            pass
+         
+            
+        if b-a < 1e-4:
+             break
+        
+        
+    
+    comp = m2-obj
+    return comp, (xm + m*g)
 
 def bisection(f, lower, upper, g, ref, x, xm):
 
@@ -54,27 +146,76 @@ def bisection(f, lower, upper, g, ref, x, xm):
     a = lower
     b = upper
     m = (a+b)/2
+#    print('\n\n\n')
+#    print('range adjustment')
+#    print(f(xm+a*g,ref)[0],f(xm+m*g,ref)[0],f(xm+b*g,ref)[0])
+#    print('\n\n\n')
+    flag = 0
     while var == 1:
-        if (f(xm+a*g,ref)[0]-obj)*(f(xm+m*g,ref)[0]-obj) < 0:
-            b = m
-            m = (a+b)/2
-        elif (f(xm+m*g,ref)[0]-obj)*(f(xm+b*g,ref)[0]-obj) < 0:
+       # if (f(xm+b*g,ref)[0]-obj) <= (f(xm+m*g,ref)[0]-obj) or (f(xm+m*g,ref)[0]-obj) <= (f(xm+a*g,ref)[0]-obj):
+        if (f(xm+b*g,ref)[0] - f(xm+m*g,ref)[0]) <= 0  or (f(xm+m*g,ref)[0]-f(xm+a*g,ref)[0]) <= 0:
             a = m
             m = (a+b)/2
+            if flag > 50 :
+                print('!!!!!!!!!!!')
+                break
+            else:
+                flag += 1
+                continue
+    
+            
+        if (f(xm+a*g,ref)[0]-obj) > 0 and (f(xm+b*g,ref)[0]-obj) > 0: 
+            a = a-0.1
+            m = (a+b)/2
+            if flag > 50 :
+                print('!!!!!!!!!!!')
+                break
+            else:
+                flag += 1
+                continue
+        elif (f(xm+a*g,ref)[0]-obj) < 0 and (f(xm+b*g,ref)[0]-obj) < 0:
+            b = 2*b
+            m = (a+b)/2
+            if flag > 50 :
+                print('!!!!!!!!!!!')
+                break
+            else:
+                flag += 1
+                continue
         else:
-            #print('a wider bound!')
+            pass
+            
+            
+        if (f(xm+b*g,ref)[0]-obj) < 0 or (f(xm+a*g,ref)[0]-obj) > 0:
+            continue
+        
+        
+        if (f(xm+a*g,ref)[0]-obj)*(f(xm+m*g,ref)[0]-obj) <= 0:
+            b = m
+            m = (a+b)/2
+        elif (f(xm+m*g,ref)[0]-obj)*(f(xm+b*g,ref)[0]-obj) <= 0:
+            a = m
+            m = (a+b)/2
+        elif flag > 50 :
+            print('!!!!!!!!!!!')
             #print('temp comp:',f(xm+m*g,ref)[0]-obj )
             break
+        else:
+            pass
          
-        if b-a < 1e-6:
+            
+        if b-a < 1e-4:
              break
+        
+        
+    
     comp = f(xm+m*g,ref)[0]-obj
     return comp, (xm + m*g)
 
 
 
 
-def search_grad(ref, g, gkeep, img = None, mkeep = None, mkeep_opt = None, lamda = None):
+def search_grad(ref, g, gkeep, img = None, mkeep = None, tracker = None, lamda = None):
     
     _,nc,imsize,_ = img.shape
     r = 1
@@ -101,39 +242,41 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, mkeep_opt = None, lamda
     
     #print('xm-img:', (xm-img).sum())
    
-    # y = xm
+    #y = xm
     
     
 # #     ####################################
-    # m0, _ = mkeep(img.detach(),ref.detach())
+    #m0, _ = mkeep(img.detach(),ref.detach())
 # #   #m0,_ = mkeep(model_style, img.detach(), style_losses)
   
     # #comp, y = Adam(m0.detach(),xm.detach(),ref.detach(),mkeep_opt = mkeep_opt)
     
     gn = mkeep(xm.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
-    comp, y = bisection(mkeep, -0.5, 1, gn, ref, img, xm)
-    # m1, gn = mkeep(xm.detach(), ref.detach())
+    #tracker.track()
+    comp, y = bisection1(mkeep, -0.5, 0.5, gn, ref, img, xm)
+    #tracker.track()
+    #m1, gn = mkeep(xm.detach(), ref.detach())
     # #m1, gn = mkeep(model_style, xm.detach(), style_losses)
     
    # # print('gn',gn.max(),gn.min(),torch.mean(torch.abs(gn)))
-    # comp = torch.abs(m1-m0)
+    #comp = torch.abs(m1-m0)
    # # print('comp',comp)
     
-    # for i,v in enumerate(vsearch):
-        # # print('v:',v)
-        # temp_im = xm.flatten() + v*gn
-        # temp_im = temp_im.reshape(1,nc,imsize,imsize)
-        # #print('temp_im-xm:', (temp_im-xm).sum())
-        # temp_mkeep, _ = mkeep(temp_im.detach(), ref.detach())
-        # #temp_mkeep, _ = mkeep(model_style, temp_im.detach(), style_losses)
-        # temp_comp =  torch.abs(temp_mkeep-m0)
-        # #if i%1000 == 0:
-        # #    print('v temp_comp',v,temp_comp)
-        # if temp_comp  < comp:
-            # #print('!',v)
-            # comp = temp_comp
-            # y = temp_im
-            # if temp_comp < 0.001:
-                # break
-   # print('y-img',(y-img).sum())        
+#    for i,v in enumerate(vsearch):
+#        # print('v:',v)
+#        temp_im = xm.flatten() + v*gn
+#        temp_im = temp_im.reshape(1,nc,imsize,imsize)
+#        #print('temp_im-xm:', (temp_im-xm).sum())
+#        temp_mkeep, _ = mkeep(temp_im.detach(), ref.detach())
+#        #temp_mkeep, _ = mkeep(model_style, temp_im.detach(), style_losses)
+#        temp_comp =  torch.abs(temp_mkeep-m0)
+#        #if i%1000 == 0:
+#        #    print('v temp_comp',v,temp_comp)
+#        if temp_comp  < comp:
+#            #print('!',v)
+#            comp = temp_comp
+#            y = temp_im
+#            if temp_comp < 0.001:
+#                break
+#    print('y-img',(y-img).sum())        
     return y, comp
