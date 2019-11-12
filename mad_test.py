@@ -260,6 +260,35 @@ def ssim(img, ref):
     
     return ssim_value, img.grad.flatten()
 
+def bisection(mkeep, lower, upper, g, ref, y_n, xm):
+
+    y_n_loss, _ = mkeep(y_n, ref)
+    a = lower
+    b = upper
+    m = (a+b)/2
+    while b - a > 1e-6:
+        loss_a = mkeep(xm+a*g, ref)[0] - y_n_loss
+        loss_m = mkeep(xm+m*g, ref)[0] - y_n_loss
+        loss_b = mkeep(xm+b*g, ref)[0] - y_n_loss
+        if loss_a * loss_b > 0 and abs(loss_b) - abs(loss_a) > 0:
+            b = -b
+            m = (a+b)/2
+        elif loss_a * loss_b > 0 and abs(loss_b) - abs(loss_a) <= 0:
+            b = 2 * (b - a)
+            m = (a+b)/2
+        elif loss_m * loss_a <= 0:
+            b = m
+            m = (a+b)/2
+        elif loss_m * loss_b <= 0:
+            a = m
+            m = (a+b)/2
+        else:
+            print('a wider bound!')
+            return None, None
+    m = (a+b)/2
+    comp = mkeep(xm+m*g, ref)[0] - y_n_loss
+    return comp, (xm + m*g)
+
 def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None, iterate = None):
     # mad hold loss
     r = 0.5 - iterate * 0.001
@@ -287,42 +316,46 @@ def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None, iterate
     comp = torch.abs(y_n_prime_loss - y_n_loss)
     first_comp = comp
     print('comp', comp) # current loss error for the holding method
-    
-    y_n1 = y_n_prime
-    for i,v in enumerate(vsearch):
-        tep_img = y_n1.flatten() + v * g_1n_prime
-        tep_img = tep_img.reshape(1, nc, imsize, imsize)
-        tep_mkeep_loss, _ = mkeep(tep_img.detach(), ref.detach())
-        tep_comp =  torch.abs(tep_mkeep_loss - y_n_loss)
-        
-        # if i % 1000 == 0:
-        #     print('Current v: ' + str(v) + ', temp_comp: ' + str(tep_comp))
-        if tep_comp  < comp:
-            # v is correct
-            comp = tep_comp
-            y_n1 = tep_img
-            
-            if tep_comp < 5e-5:
-                print("find one!")
-                break
-        # else do not renew yn, just reduce v        
 
-        # For -v:
-        tep_img = y_n1.flatten() - v * g_1n_prime
-        tep_img = tep_img.reshape(1, nc, imsize, imsize)
-        tep_mkeep_loss, _ = mkeep(tep_img.detach(), ref.detach())
-        tep_comp =  torch.abs(tep_mkeep_loss - y_n_loss)
-        
-        # if i % 1000 == 0:
-        #     print('Current v: ' + str(v) + ', temp_comp: ' + str(tep_comp))
-        if tep_comp  < comp:
-            # v is correct
-            comp = tep_comp
-            y_n1 = tep_img
+    g_1n_prime_bi = mkeep(y_n_prime.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
+    comp, y_n1 = bisection(mkeep, 0, 1, g_1n_prime_bi, ref, y_n, y_n_prime)
+
+    # if comp == None:
+    #     y_n1 = y_n_prime
+    #     for i,v in enumerate(vsearch):
+    #         tep_img = y_n1.flatten() + v * g_1n_prime
+    #         tep_img = tep_img.reshape(1, nc, imsize, imsize)
+    #         tep_mkeep_loss, _ = mkeep(tep_img.detach(), ref.detach())
+    #         tep_comp =  torch.abs(tep_mkeep_loss - y_n_loss)
             
-            if tep_comp < 5e-5:
-                print("find one!")
-                break
+    #         # if i % 1000 == 0:
+    #         #     print('Current v: ' + str(v) + ', temp_comp: ' + str(tep_comp))
+    #         if tep_comp  < comp:
+    #             # v is correct
+    #             comp = tep_comp
+    #             y_n1 = tep_img
+                
+    #             if tep_comp < 5e-5:
+    #                 print("find one!")
+    #                 break
+    #         # else do not renew yn, just reduce v        
+
+    #         # For -v:
+    #         tep_img = y_n1.flatten() - v * g_1n_prime
+    #         tep_img = tep_img.reshape(1, nc, imsize, imsize)
+    #         tep_mkeep_loss, _ = mkeep(tep_img.detach(), ref.detach())
+    #         tep_comp =  torch.abs(tep_mkeep_loss - y_n_loss)
+            
+    #         # if i % 1000 == 0:
+    #         #     print('Current v: ' + str(v) + ', temp_comp: ' + str(tep_comp))
+    #         if tep_comp  < comp:
+    #             # v is correct
+    #             comp = tep_comp
+    #             y_n1 = tep_img
+                
+    #             if tep_comp < 5e-5:
+    #                 print("find one!")
+    #                 break
 
     return y_n1, first_comp
 
