@@ -19,9 +19,9 @@ from models import *
 from opt import *
 """
 
+pebbles.jpg
 brick_wall.jpg
 lacelike.jpg
-pebbles.jpg
 radish.jpg
 red-peppers.jpg
 
@@ -34,12 +34,12 @@ einstein.png
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 imsize = 256
-nc = 1
+
 
 
 cu = 0
-iterations = 1000
-lamda = 0.8
+iterations = 5000
+lamda = 0.055    
 
 beta_1 = 0.9
 beta_2 = 0.999
@@ -103,7 +103,8 @@ def imshow1(tensor, title=None):
 # plt.figure()
 # imshow(ref_img, title='reference texture')
 
-ref_img = image_loader("./data/texture/einstein.png")
+ref_img = image_loader("./data/texture/pebbles.jpg")
+_, nc, imsize,_ = ref_img.shape
 
 """
 
@@ -124,13 +125,13 @@ gaussian noise
 
 
 """
-m = 128
-ref_img = ref_img[:,:,32:32+m,32:32+m]
+#m = 128
+#ref_img = ref_img[:,:,32:32+m,32:32+m]
 #print(ref_img.shape)
 k = 8
 ref = ref_img * 255
 #noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
-noise = torch.randn(1,nc,m,m)*torch.sqrt((torch.tensor([2.0])**k)) 
+noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
 imgn = (ref+noise.to(device)) / 255
 imgn = torch.clamp(imgn,0,1)
 
@@ -156,8 +157,8 @@ for i in range(iterations):
 #        lamda = lamda*0.9
 
     #loss1, g1 = model_gram(model_style, input_img.detach(), style_losses)
-    #loss1, g1 = mse(input_img.detach(), ref.detach())
     loss1, g1 = mse(input_img.detach(), ref.detach())
+    #loss1, g1 =ssim(input_img.detach(), ref.detach())
     
     if i%10 == 0:
         print('loss1',loss1)
@@ -167,11 +168,11 @@ for i in range(iterations):
     
 
     #loss2, g2 = mse(input_img.detach(), ref.detach())
-    #loss2, g2 = model_gram(model_style, input_img.detach(), style_losses)
-    loss2, g2 = ssim(input_img.detach(), ref.detach())
+    loss2, g2 = model_gram(model_style, input_img.detach(), style_losses)
+    #loss2, g2 = ssim(input_img.detach(), ref.detach())
     
     
-    if i%10 == 0:
+    if i%100 == 0:
         print('\n\n\n')
     
         print('loss2',loss2)
@@ -186,20 +187,20 @@ for i in range(iterations):
 #            lamda = lamda*0.2
     
     
-    if i%10 == 0:
+    if i%100 == 0:
         print('lamda:', lamda)
         
-    m_t = beta_1*m_t + (1-beta_1)*g2     # consider 90% of previous, and 10% of current
-    v_t = beta_2*v_t + (1-beta_2)*(g2*g2) # 99.9% of previous (square grad), and 1% of current
-    m_cap = m_t/(1-(beta_1**(i+1)))      #calculates the bias-corrected estimates
-    v_cap = v_t/(1-(beta_2**(i+1)))
-    gt = (m_cap)/(torch.sqrt(v_cap)+epsilon)
+#    m_t = beta_1*m_t + (1-beta_1)*g2     # consider 90% of previous, and 10% of current
+#    v_t = beta_2*v_t + (1-beta_2)*(g2*g2) # 99.9% of previous (square grad), and 1% of current
+#    m_cap = m_t/(1-(beta_1**(i+1)))      #calculates the bias-corrected estimates
+#    v_cap = v_t/(1-(beta_2**(i+1)))
+#    gt = (m_cap)/(torch.sqrt(v_cap)+epsilon)
     
-    y, comp = search_grad(ref.detach(), g = gt, gkeep = g1, img = input_img.detach(), mkeep = mse, mkeep_opt = mse_opt, lamda = lamda)
+    y, comp = search_grad(ref.detach(), g = g2, gkeep = g1, img = input_img.detach(), mkeep = mse, mkeep_opt = mse_opt, lamda = lamda)
 
     cu = cu + comp
     
-    if i %10 == 0:
+    if i %100 == 0:
         print('cumulate comp:', cu)
         plt.figure()
         imshow(torch.clamp(y,0,1))
