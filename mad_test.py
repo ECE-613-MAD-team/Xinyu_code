@@ -266,7 +266,7 @@ def bisection(mkeep, lower, upper, g, ref, y_n, xm):
     a = lower
     b = upper
     m = (a+b)/2
-    while b - a > 1e-6:
+    while b - a > 1e-8:
         loss_a = mkeep(xm+a*g, ref)[0] - y_n_loss
         loss_m = mkeep(xm+m*g, ref)[0] - y_n_loss
         loss_b = mkeep(xm+b*g, ref)[0] - y_n_loss
@@ -302,8 +302,8 @@ def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None, iterate
     # plt.show()
     # print('g_n: ', g_n.max(), g_n.min(), torch.mean(torch.abs(g_n)))
 
-    y_n_prime = torch.sub(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
-    #y_n_prime = torch.add(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
+    #y_n_prime = torch.sub(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
+    y_n_prime = torch.add(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
     # sub or add depends on the maximal or minimal opt goal
     print('y_n_prime - y_n: ', (y_n_prime - y_n).sum() )
     
@@ -318,7 +318,7 @@ def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None, iterate
     print('comp', comp) # current loss error for the holding method
 
     g_1n_prime_bi = mkeep(y_n_prime.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
-    comp, y_n1 = bisection(mkeep, 0, 1, g_1n_prime_bi, ref, y_n, y_n_prime)
+    comp, y_n1 = bisection(mkeep, -1, 0, g_1n_prime_bi, ref, y_n, y_n_prime)
 
     # if comp == None:
     #     y_n1 = y_n_prime
@@ -406,9 +406,9 @@ if __name__ == "__main__":
     cu = 0
 
     # mad search find the maximal / minimal
-    iterations = 100
+    iterations = 200
     for i in range(iterations):
-        lamuda = 1 - i * 0.005
+        lamuda = 1 - i * 0.0035
         #loss1, g1 = model_gram(model_style, input_img.detach(), style_losses)
         loss1, g1 = mse(input_img.detach(), ref.detach())
         
