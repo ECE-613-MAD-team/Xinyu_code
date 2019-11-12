@@ -139,7 +139,7 @@ def model_gram(model, img, losses):
     
     model(img)
     style_score = 0
-    for sl in style_losses:
+    for sl in losses:
         style_score += weight_gram*sl.loss
     style_score.backward()
     

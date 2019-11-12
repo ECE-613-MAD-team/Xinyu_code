@@ -14,6 +14,7 @@ Adam
 
 def Adam(m0, xm, ref, mkeep_opt):
     
+    
     lr = 0.0001
     beta_1 = 0.9
     beta_2 = 0.999
@@ -41,7 +42,34 @@ def Adam(m0, xm, ref, mkeep_opt):
             
     return comp, xm 
 
+"""
+g: gradient at xm
 
+"""
+
+def bisection(f, lower, upper, g, ref, x, xm):
+
+    obj, _ = f(x, ref)
+    var = 1
+    a = lower
+    b = upper
+    m = (a+b)/2
+    while var == 1:
+        if (f(xm+a*g,ref)[0]-obj)*(f(xm+m*g,ref)[0]-obj) < 0:
+            b = m
+            m = (a+b)/2
+        elif (f(xm+m*g,ref)[0]-obj)*(f(xm+b*g,ref)[0]-obj) < 0:
+            a = m
+            m = (a+b)/2
+        else:
+            #print('a wider bound!')
+            #print('temp comp:',f(xm+m*g,ref)[0]-obj )
+            break
+         
+        if b-a < 1e-6:
+             break
+    comp = f(xm+m*g,ref)[0]-obj
+    return comp, (xm + m*g)
 
 
 
@@ -68,41 +96,44 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, mkeep_opt = None, lamda
     
     
     ################# 
-    #xm = torch.sub(img.flatten(), torch.mul(lamda, gm)).reshape(1,nc,imsize,imsize)
-    xm = torch.add(img.flatten(), torch.mul(lamda, gm)).reshape(1,nc,imsize,imsize)
+    xm = torch.sub(img.flatten(), torch.mul(lamda, gm)).reshape(1,nc,imsize,imsize)
+    #xm = torch.add(img.flatten(), torch.mul(lamda, gm)).reshape(1,nc,imsize,imsize)
     
     #print('xm-img:', (xm-img).sum())
    
-    y = xm
+    # y = xm
     
     
-#     ####################################
-    m0, _ = mkeep(img.detach(),ref.detach())
-#   #m0,_ = mkeep(model_style, img.detach(), style_losses)
+# #     ####################################
+    # m0, _ = mkeep(img.detach(),ref.detach())
+# #   #m0,_ = mkeep(model_style, img.detach(), style_losses)
   
-    #comp, y = Adam(m0.detach(),xm.detach(),ref.detach(),mkeep_opt = mkeep_opt)
-    m1, gn = mkeep(xm.detach(), ref.detach())
-    #m1, gn = mkeep(model_style, xm.detach(), style_losses)
+    # #comp, y = Adam(m0.detach(),xm.detach(),ref.detach(),mkeep_opt = mkeep_opt)
     
-   # print('gn',gn.max(),gn.min(),torch.mean(torch.abs(gn)))
-    comp = torch.abs(m1-m0)
-   # print('comp',comp)
+    gn = mkeep(xm.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
+    comp, y = bisection(mkeep, -0.5, 1, gn, ref, img, xm)
+    # m1, gn = mkeep(xm.detach(), ref.detach())
+    # #m1, gn = mkeep(model_style, xm.detach(), style_losses)
     
-    for i,v in enumerate(vsearch):
-        # print('v:',v)
-        temp_im = xm.flatten() + v*gn
-        temp_im = temp_im.reshape(1,nc,imsize,imsize)
-        #print('temp_im-xm:', (temp_im-xm).sum())
-        temp_mkeep, _ = mkeep(temp_im.detach(), ref.detach())
-        #temp_mkeep, _ = mkeep(model_style, temp_im.detach(), style_losses)
-        temp_comp =  torch.abs(temp_mkeep-m0)
-        if i%1000 == 0:
-            print('v temp_comp',v,temp_comp)
-        if temp_comp  < comp:
-            #print('!',v)
-            comp = temp_comp
-            y = temp_im
-            if temp_comp < 0.001:
-                break
+   # # print('gn',gn.max(),gn.min(),torch.mean(torch.abs(gn)))
+    # comp = torch.abs(m1-m0)
+   # # print('comp',comp)
+    
+    # for i,v in enumerate(vsearch):
+        # # print('v:',v)
+        # temp_im = xm.flatten() + v*gn
+        # temp_im = temp_im.reshape(1,nc,imsize,imsize)
+        # #print('temp_im-xm:', (temp_im-xm).sum())
+        # temp_mkeep, _ = mkeep(temp_im.detach(), ref.detach())
+        # #temp_mkeep, _ = mkeep(model_style, temp_im.detach(), style_losses)
+        # temp_comp =  torch.abs(temp_mkeep-m0)
+        # #if i%1000 == 0:
+        # #    print('v temp_comp',v,temp_comp)
+        # if temp_comp  < comp:
+            # #print('!',v)
+            # comp = temp_comp
+            # y = temp_im
+            # if temp_comp < 0.001:
+                # break
    # print('y-img',(y-img).sum())        
     return y, comp
