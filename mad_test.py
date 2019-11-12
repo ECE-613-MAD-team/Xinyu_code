@@ -15,6 +15,7 @@ from math import exp
 import numpy as np
 import copy
 import cv2
+import datetime
 
 # TODO: using constant to control type
 weight_mse = 2e4
@@ -205,7 +206,7 @@ def imshow(tensor, title=None):
     image = tensor.cpu().clone()  # we clone the tensor to not do changes on it
     image = image.squeeze(0)      # remove the fake batch dimension
     image = unloader(image)
-    plt.imshow(image)
+    plt.imshow(image, cmap='gray')
     if title is not None:
         plt.title(title)
     plt.savefig(image_tag+'_result.jpg',dpi = 300)
@@ -259,12 +260,12 @@ def ssim(img, ref):
     
     return ssim_value, img.grad.flatten()
 
-def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None):
+def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None, iterate = None):
     # mad hold loss
-    r = 1
-    step = 0.0001 # for control of step
-    N = 2 * r / step
-    vsearch = np.linspace(-1.5 * r, 1.5 * r, N)
+    r = 0.5 - iterate * 0.001
+    step = 5e-5 # for control of step
+    N = r / step
+    vsearch = np.linspace(r, 0, N+1)
     y_n = img # current image
 
     g_n = g_2n - torch.mul(torch.div(torch.dot(g_2n, g_1n), torch.dot(g_1n, g_1n)), g_1n)
@@ -272,8 +273,8 @@ def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None):
     # plt.show()
     # print('g_n: ', g_n.max(), g_n.min(), torch.mean(torch.abs(g_n)))
 
-    #y_n_prime = torch.sub(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
-    y_n_prime = torch.add(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
+    y_n_prime = torch.sub(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
+    #y_n_prime = torch.add(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
     # sub or add depends on the maximal or minimal opt goal
     print('y_n_prime - y_n: ', (y_n_prime - y_n).sum() )
     
@@ -300,13 +301,34 @@ def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None):
             # v is correct
             comp = tep_comp
             y_n1 = tep_img
-            if tep_comp < 0.001:
+            
+            if tep_comp < 5e-5:
+                print("find one!")
                 break
         # else do not renew yn, just reduce v        
+
+        # For -v:
+        tep_img = y_n1.flatten() - v * g_1n_prime
+        tep_img = tep_img.reshape(1, nc, imsize, imsize)
+        tep_mkeep_loss, _ = mkeep(tep_img.detach(), ref.detach())
+        tep_comp =  torch.abs(tep_mkeep_loss - y_n_loss)
+        
+        # if i % 1000 == 0:
+        #     print('Current v: ' + str(v) + ', temp_comp: ' + str(tep_comp))
+        if tep_comp  < comp:
+            # v is correct
+            comp = tep_comp
+            y_n1 = tep_img
+            
+            if tep_comp < 5e-5:
+                print("find one!")
+                break
+
     return y_n1, first_comp
 
 if __name__ == "__main__":
-    
+    starttime = datetime.datetime.now()
+
     # load images
     ref_img = image_loader("./pic_src/"+image_tag+".png")
 
@@ -353,33 +375,28 @@ if __name__ == "__main__":
     # mad search find the maximal / minimal
     iterations = 100
     for i in range(iterations):
-        
+        lamuda = 1 - i * 0.005
         #loss1, g1 = model_gram(model_style, input_img.detach(), style_losses)
         loss1, g1 = mse(input_img.detach(), ref.detach())
-        
-        # print('loss1',loss1)
-        # plt.hist(g1.cpu(),1000)
-        # plt.show()
-        # print('g1',g1.max(),g1.min(),torch.mean(torch.abs(g1)))
         
         #loss2, g2 = mse(input_img.detach(), ref.detach())
         #loss2, g2 = model_gram(model_style, input_img.detach(), style_losses)
         loss2, g2 = ssim(input_img.detach(), ref.detach())
         
-        # print('\n\n\n')
-        
-        # print('loss2',loss2)
-        # plt.hist(g2.cpu(),1000)
-        # plt.show()
-        # print('g2',g2.max(),g2.min(),torch.mean(torch.abs(g2)))
-        
-        y, comp = search_grad(ref.detach(), g_2n = g2, g_1n = g1, img = input_img.detach(), mkeep = mse, lamda = 0.01)
+        y, comp = search_grad(ref.detach(), g_2n = g2, g_1n = g1, img = input_img.detach(), mkeep = mse, lamda = lamuda, iterate = i)
         
         cu = cu + comp
-        print('cumulate comp:', cu)
-        if comp > 1:
-            torch.save(y,'temp.pt')  
-            break
+        loss_keep, _ = mse(y.detach(), ref.detach())
+        loss_change, _ = ssim(y.detach(), ref.detach())
+        print('iteration: ' + str(i))
+        print('loss1:     ' + str(loss1))
+        print('loss2:     ' + str(loss2))
+        print('keep:      ' + str( torch.abs(loss_keep - loss1) ) )
+        print('change:    ' + str( torch.abs(loss_change - loss2) ) )
+        #print('cumulate comp:', cu)
+        # if comp > 1:
+        #     torch.save(y,'temp.pt')  
+        #     break
         
         # if i % 10 == 0:
         #     print('iterate: ' + str(i))
@@ -390,9 +407,13 @@ if __name__ == "__main__":
         if comp < 5e-5:
             print('iterate: ' + str(i))
             print('comp: ' + str(comp))
-            plt.figure()
-            imshow(torch.clamp(y, 0, 1))
+            # plt.figure()
+            # imshow(torch.clamp(y, 0, 1))
             break
 
     # torch.save(input_img, 'pebbles_noise_1.pt')
     # plt.figure()
+    plt.figure()
+    imshow(torch.clamp(input_img, 0, 1))
+    endtime = datetime.datetime.now()
+    print ((endtime - starttime).seconds)
