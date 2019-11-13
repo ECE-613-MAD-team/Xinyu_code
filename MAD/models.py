@@ -135,13 +135,39 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
              break
 
     model = model[:(i + 1)]
-
+    
+    del style_img
+    torch.cuda.empty_cache()
+    
     return model, style_losses     #, content_losses
 
 
+def model_gram_forward(img, ref):
+    
+    img = img.to(device)
+    ref = ref.to(device)
+    
+    
+    
+    model_style, style_losses = get_style_model_and_losses(cnn,
+          cnn_normalization_mean, cnn_normalization_std, ref, device)
+    
+    with torch.no_grad():
+        model_style(img)
+        
+    style_score = 0
+    for sl in style_losses:
+        style_score += weight_gram*sl.loss
+   
+    grad = 0
+    
+    del ref,img,model_style
+    torch.cuda.empty_cache()
+    
+    return style_score.cpu(), grad
 
 
-def model_gram(img, ref, device):
+def model_gram(img, ref):
     
     img = img.to(device)
     ref = ref.to(device)
@@ -156,10 +182,11 @@ def model_gram(img, ref, device):
     for sl in style_losses:
         style_score += weight_gram*sl.loss
     style_score.backward()
+    grad = img.grad.cpu()
     
-    del ref
+    del ref,img,model_style
     torch.cuda.empty_cache()
-    return style_score.cpu(), img.grad.flatten().cpu()
+    return style_score.cpu(), grad.flatten()
 
 def mse(img,ref):
 
@@ -186,8 +213,8 @@ def ssim(img, ref):
     ssim_out = -weight_ssim*ssim_loss(ref, img)
     ssim_out.backward()
     
-    del ref
-    torch.cuda.empty_cache()
+#    del ref
+#    torch.cuda.empty_cache()
     return ssim_value, img.grad.flatten()
 
 

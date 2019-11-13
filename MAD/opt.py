@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-
+from models import *
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -58,9 +58,9 @@ def bisection1(f, lower, upper, g, ref, x, xm):
 #    print(f(xm+a*g,ref)[0],f(xm+m*g,ref)[0],f(xm+b*g,ref)[0])
 #    print('\n\n\n')
     flag = 0
-    m1, _ = f(xm+a*g,ref)
-    m2, _ = f(xm+m*g,ref)
-    m3, _ = f(xm+b*g,ref)
+    m1, _ = f((xm+a*g),ref)
+    m2, _ = f((xm+m*g),ref)
+    m3, _ = f((xm+b*g),ref)
     while var == 1:
        # if (f(xm+b*g,ref)[0]-obj) <= (f(xm+m*g,ref)[0]-obj) or (f(xm+m*g,ref)[0]-obj) <= (f(xm+a*g,ref)[0]-obj):
         
@@ -68,8 +68,8 @@ def bisection1(f, lower, upper, g, ref, x, xm):
         if (m3-m2) <= 0  or (m2-m1) <= 0:
             a = m
             m = (a+b)/2
-            m1, _ = f(xm+a*g,ref)
-            m2, _ = f(xm+m*g,ref)
+            m1, _ = f((xm+a*g),ref)
+            m2, _ = f((xm+m*g),ref)
             #m3, _ = f(xm+b*g,ref)
             if flag > 50 :
                 print('!!!!!!!!!!!')
@@ -83,8 +83,8 @@ def bisection1(f, lower, upper, g, ref, x, xm):
         if (m1-obj) > 0 and (m3-obj) > 0: 
             a = a-0.1
             m = (a+b)/2
-            m1, _ = f(xm+a*g,ref)
-            m2, _ = f(xm+m*g,ref)
+            m1, _ = f((xm+a*g),ref)
+            m2, _ = f((xm+m*g),ref)
             #m3, _ = f(xm+b*g,ref)
             if flag > 50 :
                 print('!!!!!!!!!!!')
@@ -96,8 +96,8 @@ def bisection1(f, lower, upper, g, ref, x, xm):
             b = 2*b
             m = (a+b)/2
             #m1, _ = f(xm+a*g,ref)
-            m2, _ = f(xm+m*g,ref)
-            m3, _ = f(xm+b*g,ref)
+            m2, _ = f((xm+m*g),ref)
+            m3, _ = f((xm+b*g),ref)
             if flag > 50 :
                 print('!!!!!!!!!!!')
                 break
@@ -116,13 +116,13 @@ def bisection1(f, lower, upper, g, ref, x, xm):
         if (m1-obj)*(m2-obj) <= 0:
             b = m
             m = (a+b)/2
-            m2, _ = f(xm+m*g,ref)
-            m3, _ = f(xm+b*g,ref)
+            m2, _ = f((xm+m*g),ref)
+            m3, _ = f((xm+b*g),ref)
         elif (m2-obj)*(m3-obj) <= 0:
             a = m
             m = (a+b)/2
-            m1, _ = f(xm+a*g,ref)
-            m2, _ = f(xm+m*g,ref)
+            m1, _ = f((xm+a*g),ref)
+            m2, _ = f((xm+m*g),ref)
         elif flag > 50 :
             print('!!!!!!!!!!!')
             #print('temp comp:',f(xm+m*g,ref)[0]-obj )
@@ -135,8 +135,8 @@ def bisection1(f, lower, upper, g, ref, x, xm):
              break
         
         
-    del ref
-    torch.cuda.empty_cache()
+#    del ref
+#    torch.cuda.empty_cache()
     
     comp = m2-obj
     return comp, (xm + m*g)
@@ -153,12 +153,13 @@ def bisection(f, lower, upper, g, ref, x, xm):
 #    print(f(xm+a*g,ref)[0],f(xm+m*g,ref)[0],f(xm+b*g,ref)[0])
 #    print('\n\n\n')
     flag = 0
+    tol = 100
     while var == 1:
        # if (f(xm+b*g,ref)[0]-obj) <= (f(xm+m*g,ref)[0]-obj) or (f(xm+m*g,ref)[0]-obj) <= (f(xm+a*g,ref)[0]-obj):
         if (f(xm+b*g,ref)[0] - f(xm+m*g,ref)[0]) <= 0  or (f(xm+m*g,ref)[0]-f(xm+a*g,ref)[0]) <= 0:
             a = m
             m = (a+b)/2
-            if flag > 50 :
+            if flag > tol :
                 print('!!!!!!!!!!!')
                 break
             else:
@@ -169,7 +170,7 @@ def bisection(f, lower, upper, g, ref, x, xm):
         if (f(xm+a*g,ref)[0]-obj) > 0 and (f(xm+b*g,ref)[0]-obj) > 0: 
             a = a-0.1
             m = (a+b)/2
-            if flag > 50 :
+            if flag > tol :
                 print('!!!!!!!!!!!')
                 break
             else:
@@ -178,7 +179,7 @@ def bisection(f, lower, upper, g, ref, x, xm):
         elif (f(xm+a*g,ref)[0]-obj) < 0 and (f(xm+b*g,ref)[0]-obj) < 0:
             b = 2*b
             m = (a+b)/2
-            if flag > 50 :
+            if flag > tol :
                 print('!!!!!!!!!!!')
                 break
             else:
@@ -198,7 +199,7 @@ def bisection(f, lower, upper, g, ref, x, xm):
         elif (f(xm+m*g,ref)[0]-obj)*(f(xm+b*g,ref)[0]-obj) <= 0:
             a = m
             m = (a+b)/2
-        elif flag > 50 :
+        elif flag > tol :
             print('!!!!!!!!!!!')
             #print('temp comp:',f(xm+m*g,ref)[0]-obj )
             break
@@ -206,7 +207,7 @@ def bisection(f, lower, upper, g, ref, x, xm):
             pass
          
             
-        if b-a < 1e-4:
+        if b-a < 5e-6:
              break
         
         
@@ -239,8 +240,8 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, tracker = None, lamda =
     
     
     ################# 
-    xm = torch.sub(img.flatten(), torch.mul(lamda, gm)).reshape(1,nc,imsize,imsize)
-    #xm = torch.add(img.flatten(), torch.mul(lamda, gm)).reshape(1,nc,imsize,imsize)
+    #xm = torch.sub(img.flatten(), torch.mul(lamda, gm)).reshape(1,nc,imsize,imsize)
+    xm = torch.add(img.flatten(), torch.mul(lamda, gm)).reshape(1,nc,imsize,imsize)
     
     #print('xm-img:', (xm-img).sum())
    
@@ -255,7 +256,7 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, tracker = None, lamda =
     
     gn = mkeep(xm.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
     #tracker.track()
-    comp, y = bisection1(mkeep, -0.5, 0.5, gn, ref, img, xm)
+    comp, y = bisection1(model_gram_forward, -0.5, 0.5, gn, ref, img, xm)
     #tracker.track()
     #m1, gn = mkeep(xm.detach(), ref.detach())
     # #m1, gn = mkeep(model_style, xm.detach(), style_losses)
