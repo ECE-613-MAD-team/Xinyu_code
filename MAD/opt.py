@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 """
@@ -135,6 +135,8 @@ def bisection1(f, lower, upper, g, ref, x, xm):
              break
         
         
+    del ref
+    torch.cuda.empty_cache()
     
     comp = m2-obj
     return comp, (xm + m*g)

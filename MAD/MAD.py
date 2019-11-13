@@ -44,7 +44,7 @@ imsize = 256
 
 cu = 0
 iterations = 5000
-lamda = 0.002    
+lamda = 0.02    
 
 beta_1 = 0.9
 beta_2 = 0.999
@@ -69,14 +69,14 @@ unloader = transforms.ToPILImage()  # reconvert into PIL image
 def cv_converter(img):
     image = Image.fromarray(img[...,::-1])
     image = loader(image).unsqueeze(0)
-    return image.to(device, torch.float)    
+    return image.to(torch.float)    
  
     
 def image_loader(image_name):
     image = Image.open(image_name)
     # fake batch dimension required to fit network's input dimensions
     image = loader(image).unsqueeze(0)
-    return image.to(device, torch.float)
+    return image.to(torch.float)
 
 
 
@@ -89,7 +89,7 @@ def imshow(tensor, title=None):
     plt.imshow(image)
     if title is not None:
         plt.title(title)
-    plt.savefig('pebbles_noise8_1.jpg',dpi = 300)
+    plt.savefig('pebbles_noise7_1.jpg',dpi = 300)
     plt.show()
 
     
@@ -101,7 +101,7 @@ def imshow1(tensor, title=None):
     plt.imshow(image)
     if title is not None:
         plt.title(title)
-    #plt.savefig('pebbles_noise8_3.jpg',dpi = 300)
+    plt.savefig('pebbles_noise7_3.jpg',dpi = 300)
     plt.show()
 # plt.figure()
 # imshow(ref_img, title='reference texture')
@@ -131,11 +131,11 @@ gaussian noise
 #m = 128
 #ref_img = ref_img[:,:,32:32+m,32:32+m]
 #print(ref_img.shape)
-k = 8
+k = 7
 ref = ref_img * 255
 #noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
 noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
-imgn = (ref+noise.to(device)) / 255
+imgn = (ref+noise) / 255
 imgn = torch.clamp(imgn,0,1)
 
 
@@ -147,7 +147,7 @@ imgn = torch.clamp(imgn,0,1)
 
 
 model_style, style_losses = get_style_model_and_losses(cnn,
-          cnn_normalization_mean, cnn_normalization_std, ref_img)
+          cnn_normalization_mean, cnn_normalization_std, ref_img, device = device)
 
 #print(model_style)
 
@@ -166,10 +166,7 @@ for i in range(iterations):
 #    else:
 #        lamda = lamda*0.940
     
-    if loss2 > 10:
-        lamda = lamda*0.998
-    else:
-        lamda = lamda*0.940
+    
     #loss1, g1 = model_gram(model_style, input_img.detach(), style_losses)
     
     gpu_tracker.track()
@@ -186,7 +183,11 @@ for i in range(iterations):
 
     #loss2, g2 = mse(input_img.detach(), ref.detach())
     gpu_tracker.track()
-    loss2, g2 = model_gram(input_img.detach(), ref.detach())
+    loss2, g2 = model_gram(input_img.detach(), ref.detach(), device)
+#    if loss2 > 10:
+#        lamda = lamda*0.998
+#    else:
+#        lamda = lamda*0.940
    
     #loss2, g2 = ssim(input_img.detach(), ref.detach())
     
