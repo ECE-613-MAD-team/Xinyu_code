@@ -21,6 +21,7 @@ from opt import *
 import inspect
 from Pytorch_Memory_Utils import *
 
+import time
 import warnings
 warnings.filterwarnings("ignore")
 """
@@ -162,11 +163,13 @@ model_style, style_losses = get_style_model_and_losses(cnn,
 #print(model_style)
 
 imgn.data.clamp_(0,1)
-input_img = imgn.detach()
+input_img = imgn.detach() #torch.load('temp.pt')
 ref = ref_img.detach()
 
+iters = 5
 prev_loss = 0
 count = 0
+
 #frame = inspect.currentframe()          # define a frame to track
 #gpu_tracker = MemTracker(frame) 
 for i in range(iterations):
@@ -175,9 +178,9 @@ for i in range(iterations):
     
     """
   
-    lamda = step_size(lamda0 = 0.2, opt = 1000, rate1 = 0.997, rate2 = 0.995, iteration = i)
+    lamda = step_size(lamda0 = 0.2, opt = 1000, rate1 = 0.995, rate2 = 0.995, iteration = i)
     
-    if i%10 == 0:
+    if i%iters == 0:
         print('iteration',i)
         print('lamda',lamda)    
     
@@ -185,7 +188,7 @@ for i in range(iterations):
     #gpu_tracker.track()
     loss1, g1 = model_gram(input_img.detach(), ref.detach())
     
-    if i%10 == 0:
+    if i%iters == 0:
         print('loss1',loss1)
         #plt.hist(g1.cpu(),1000)
         #plt.show()
@@ -202,7 +205,7 @@ for i in range(iterations):
     #gpu_tracker.track()   
     loss2, g2 = mse(input_img.detach(), ref.detach())
     
-    if i%10 == 0:
+    if i%iters == 0:
         print('\n')
         print('loss2',loss2)
         #plt.hist(g2.cpu(),1000)
@@ -232,15 +235,15 @@ for i in range(iterations):
     
     cu = cu + comp
     
-    if i %10 == 0:
+    if i %iters == 0:
         print('\n')
         print('cumulate comp:', cu)
         plt.figure()
         imshow(torch.clamp(y,0,1))
         print('\n\n\n')
-    if comp > 1:
+    if cu > 5:
         print('too big step size, change lamda!!')
-        torch.save(y,'temp.pt')  
+        torch.save(input_img,'temp.pt')  
         break
     
       

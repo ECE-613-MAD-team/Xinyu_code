@@ -4,10 +4,14 @@ import torch.nn.functional as F
 import copy
 import pytorch_ssim
 import torchvision.models as models
+import torchvision.transforms as transforms
+from PIL import Image
+
 #content_layers_default = ['conv_4']
 #style_layers_default = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
 style_layers_default = ['conv_1','pool_2', 'pool_4', 'pool_8', 'pool_12']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+imsize = 256
 
 weight_mse = 2e4
 weight_gram = 1e5
@@ -18,6 +22,17 @@ cnn_normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
 cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
 cnn = models.vgg19(pretrained=True).features.to(device).eval()
 
+loader = transforms.Compose([
+    transforms.Resize(imsize),  # scale imported image
+    transforms.ToTensor()])  # transform it into a torch tensor
+unloader = transforms.ToPILImage()  # reconvert into PIL image
+def image_loader(image_name):
+    image = Image.open(image_name)
+    # fake batch dimension required to fit network's input dimensions
+    image = loader(image).unsqueeze(0)
+    return image.to(torch.float)
+ref_img = image_loader("./data/texture/pebbles.jpg")
+ 
 class StyleLoss(nn.Module):
 
     def __init__(self, target_feature):
@@ -141,6 +156,8 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     
     return model, style_losses     #, content_losses
 
+model_style, style_losses = get_style_model_and_losses(cnn,
+          cnn_normalization_mean, cnn_normalization_std, ref_img, device = device)
 
 def model_gram_forward(img, ref):
     
@@ -187,6 +204,33 @@ def model_gram(img, ref):
     del ref,img,model_style
     torch.cuda.empty_cache()
     return style_score.cpu(), grad.flatten()
+
+
+
+def model_gram_opt(m0, img, ref):
+    
+    img = img.to(device)
+    ref = ref.to(device)
+    m0 = m0.to(device)
+    
+    img.requires_grad_()
+    
+    model_style(img)
+    style_score = 0
+    for sl in style_losses:
+        style_score += weight_gram*sl.loss
+    comp = (m0-style_score)**2
+    
+    comp.backward()
+    
+    grad = img.grad.cpu()
+    
+    
+    del ref,img
+    torch.cuda.empty_cache()
+    
+    return comp.cpu(), grad
+
 
 def mse(img,ref):
 
