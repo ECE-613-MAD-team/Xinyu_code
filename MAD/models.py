@@ -8,10 +8,11 @@ import torchvision.transforms as transforms
 from PIL import Image
 
 #content_layers_default = ['conv_4']
-#style_layers_default = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
-style_layers_default = ['conv_1','pool_2', 'pool_4', 'pool_8', 'pool_12']
+style_layers_default = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
+#style_layers_default = ['conv_1','pool_2', 'pool_4', 'pool_8', 'pool_12']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 imsize = 256
+nc = 3
 
 weight_mse = 2e4
 weight_gram = 1e5
@@ -161,6 +162,7 @@ model_style, style_losses = get_style_model_and_losses(cnn,
 
 def model_gram_forward(img, ref):
     
+    img = img.reshape(1,nc,imsize,imsize)
     img = img.to(device)
     ref = ref.to(device)
     
@@ -186,6 +188,7 @@ def model_gram_forward(img, ref):
 
 def model_gram(img, ref):
     
+    img = img.reshape(1,nc,imsize,imsize)
     img = img.to(device)
     ref = ref.to(device)
     
@@ -208,7 +211,8 @@ def model_gram(img, ref):
 
 
 def model_gram_opt(m0, img, ref):
-    
+
+    img = img.reshape(1,nc,imsize,imsize)
     img = img.to(device)
     ref = ref.to(device)
     m0 = m0.to(device)
@@ -235,7 +239,7 @@ def model_gram_opt(m0, img, ref):
 def mse(img,ref):
 
     
-    _, nc, imsize, imsize = img.shape
+    img = img.reshape(1,nc,imsize,imsize)
     img.requires_grad_()
     
     N = nc*imsize*imsize
@@ -249,7 +253,7 @@ def mse(img,ref):
 def ssim(img, ref):
     
    
-    
+    img = img.reshape(1,nc,imsize,imsize)
     img.requires_grad_()
     
     ssim_value = pytorch_ssim.ssim(ref, img)
@@ -262,30 +266,31 @@ def ssim(img, ref):
     return ssim_value, img.grad.flatten()
 
 
-#def mse_opt(m0, temp, ref):
-#    
-#    _, nc, imsize, imsize = temp.shape
-#    temp.requires_grad_()
-#   
-#    N = nc*imsize*imsize
-#    loss_mse = weight_mse*((temp-ref)**2).sum() / (N)
-#    comp = (m0-loss_mse)**2
-#   # print('comp',comp,m0-loss_mse,m0,loss_mse)
-#    comp.backward()
+def mse_opt(m0, temp, ref):
+    
+    temp = temp.reshape(1,nc,imsize,imsize)
+    temp.requires_grad_()
+   
+    N = nc*imsize*imsize
+    loss_mse = weight_mse*((temp-ref)**2).sum() / (N)
+    comp = (m0-loss_mse)**2
+   # print('comp',comp,m0-loss_mse,m0,loss_mse)
+    comp.backward()
+
+    return comp, temp.grad
 #
-#    return comp, temp.grad
 #
 #
-#
-#def ssim_opt(m0, temp, ref):
-#    
-#    _, nc, imsize, imsize = temp.shape
-#    temp.requires_grad_()
-#    
-#    ssim_value = pytorch_ssim.ssim(ref, temp)
-#    ssim_loss = pytorch_ssim.SSIM()
-#    ssim_out = -weight_ssim*ssim_loss(ref, temp)
-#    comp = ((-weight_ssim*m0)-ssim_out)**2
-#    comp.backward()
-#    
-#    return comp, temp.grad
+def ssim_opt(m0, temp, ref):
+    
+    temp = temp.reshape(1,nc,imsize,imsize)
+   # _, nc, imsize, imsize = temp.shape
+    temp.requires_grad_()
+    
+    ssim_value = pytorch_ssim.ssim(ref, temp)
+    ssim_loss = pytorch_ssim.SSIM()
+    ssim_out = -weight_ssim*ssim_loss(ref, temp)
+    comp = ((-weight_ssim*m0)-ssim_out)**2
+    comp.backward()
+    
+    return comp, temp.grad

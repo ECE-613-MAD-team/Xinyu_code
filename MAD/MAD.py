@@ -43,7 +43,7 @@ imsize = 256
 
 
 
-cu = 0
+
 iterations = 10000
 #lamda = 0.04    
 
@@ -92,7 +92,7 @@ def image_loader(image_name):
 
 
 
-def imshow(tensor, title=None):
+def imshow(tensor, title=None): 
     tensor = torch.clamp(tensor,0,1)
     image = tensor.cpu().clone()  # we clone the tensor to not do changes on it
     image = image.squeeze(0)      # remove the fake batch dimension
@@ -100,7 +100,8 @@ def imshow(tensor, title=None):
     plt.imshow(image)
     if title is not None:
         plt.title(title)
-    plt.savefig('pebbles_noise8_5.jpg',dpi = 300)
+    plt.savefig('pebbles_blur5_1.jpg')
+    
     plt.show()
 
     
@@ -112,12 +113,12 @@ def imshow1(tensor, title=None):
     plt.imshow(image)
     if title is not None:
         plt.title(title)
-    plt.savefig('pebbles_noise6_3.jpg',dpi = 300)
+    plt.savefig('pebbles_noise6_3.jpg')
     plt.show()
 # plt.figure()
 # imshow(ref_img, title='reference texture')
-
 ref_img = image_loader("./data/texture/pebbles.jpg")
+imgn = image_loader("./data/texture/blur_5_pebbles.jpg")
 _, nc, imsize,_ = ref_img.shape
 
 """
@@ -139,15 +140,13 @@ gaussian noise
 
 
 """
-#m = 128
-#ref_img = ref_img[:,:,32:32+m,32:32+m]
-#print(ref_img.shape)
-k = 8
-ref = ref_img * 255
+
+#k = 8
+#ref = ref_img * 255
+##noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
 #noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
-noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
-imgn = (ref+noise) / 255
-imgn = torch.clamp(imgn,0,1)
+#imgn = (ref+noise) / 255
+#imgn = torch.clamp(imgn,0,1)
 
 
 
@@ -163,13 +162,15 @@ model_style, style_losses = get_style_model_and_losses(cnn,
 #print(model_style)
 
 imgn.data.clamp_(0,1)
-input_img = imgn.detach() #torch.load('temp.pt')
+input_img = imgn.detach()
+#input_img = torch.load('temp.pt')
 ref = ref_img.detach()
 
-iters = 5
+iters = 50
 prev_loss = 0
 count = 0
-
+lamda2 = -0.01
+#lamda = 0.01
 #frame = inspect.currentframe()          # define a frame to track
 #gpu_tracker = MemTracker(frame) 
 for i in range(iterations):
@@ -178,7 +179,7 @@ for i in range(iterations):
     
     """
   
-    lamda = step_size(lamda0 = 0.2, opt = 1000, rate1 = 0.995, rate2 = 0.995, iteration = i)
+    lamda = step_size(lamda0 = 0.02, opt = 1000, rate1 = 0.998, rate2 = 0.950, iteration = i)
     
     if i%iters == 0:
         print('iteration',i)
@@ -186,7 +187,11 @@ for i in range(iterations):
     
     
     #gpu_tracker.track()
-    loss1, g1 = model_gram(input_img.detach(), ref.detach())
+    loss1, g1 = mse(input_img.detach(), ref.detach())
+    if i ==0:
+        m0 = loss1
+    else:
+        pass
     
     if i%iters == 0:
         print('loss1',loss1)
@@ -203,7 +208,7 @@ for i in range(iterations):
         prev_loss = loss2
     
     #gpu_tracker.track()   
-    loss2, g2 = mse(input_img.detach(), ref.detach())
+    loss2, g2 = model_gram(input_img.detach(), ref.detach())
     
     if i%iters == 0:
         print('\n')
@@ -224,22 +229,23 @@ for i in range(iterations):
     else:
         count = 0
     
-    if count > 400:
+    if count > 100:
         print('early stopping!!')
         break
 
 
     
     #gpu_tracker.track()
-    y, comp = search_grad(ref.detach(), g = g2, gkeep = g1, img = input_img.detach(), mkeep = model_gram, tracker = None, lamda = lamda)
+    y, comp, lamda2 = search_grad(ref.detach(), g = g2, gkeep = g1, img = input_img.detach(), mkeep = mse, init_loss = m0, lamda = lamda, lamda2 = lamda2)
     
-    cu = cu + comp
+
     
     if i %iters == 0:
         print('\n')
-        print('cumulate comp:', cu)
+        print('cumulate comp:', comp)
         plt.figure()
         imshow(torch.clamp(y,0,1))
+        torch.save(input_img,'temp.pt')
         print('\n\n\n')
     if cu > 5:
         print('too big step size, change lamda!!')
