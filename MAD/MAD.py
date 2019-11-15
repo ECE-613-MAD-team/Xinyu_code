@@ -179,7 +179,7 @@ for i in range(iterations):
     
     """
   
-    lamda = step_size(lamda0 = 0.02, opt = 1000, rate1 = 0.998, rate2 = 0.950, iteration = i)
+    lamda = step_size(lamda0 = 0.02, opt = 1000, rate1 = 0.999, rate2 = 0.950, iteration = i)
     
     if i%iters == 0:
         print('iteration',i)

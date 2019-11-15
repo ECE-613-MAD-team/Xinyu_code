@@ -178,7 +178,11 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
     
     
     
-
+    """
+    
+    code from Professor Wang
+    
+    """
     #m0, _ = mkeep(img ,ref)
 #    mb, _ = mkeep(xm ,ref)
 #    
@@ -191,10 +195,20 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
 #    y = xk.reshape(1,nc,imsize,imsize)
 
 
-
+    """
+    
+    bisection
+    
+    """
     gn = mkeep(xm.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
     comp, y = bisection1(mkeep, -1, -0, gn, ref, init_loss, xm)
     
+    
+    """
+    
+    Adam
+    
+    """
     if torch.abs(comp) > 0.01:
 #        lamda = 0.9*lamda
 #        comp = 0
