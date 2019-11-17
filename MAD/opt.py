@@ -219,7 +219,7 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
 #        m0, _ = mse(img,ref)
 #        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = mse_opt)
         #m0, _ = model_gram_forward(img,ref)
-        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = model_gram_opt)
+        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = mse_opt)
     
     
         
