@@ -17,7 +17,7 @@ Adam
 def Adam(m0, xm, ref, mkeep_opt):
     
     xm = xm.reshape(1,nc,imsize,imsize)
-    lr = 1e-5  # vgg+gram 2e-5
+    lr = 2e-5  # vgg+gram 2e-5
     beta_1 = 0.9
     beta_2 = 0.999
     epsilon = 1e-8
@@ -31,8 +31,11 @@ def Adam(m0, xm, ref, mkeep_opt):
     while var == 1:
         t += 1
         #print('t',t)
-        #lr = lr*(0.990**t)
+        #if t > 10: 
+        #    lr = lr*0.9
         comp, g_t = mkeep_opt(m0,xm,ref)
+        if comp < 1e-5:    #vgg+gram 1e-6mm0
+            break
         m_t = beta_1*m_t + (1-beta_1)*g_t     # consider 90% of previous, and 10% of current
         v_t = beta_2*v_t + (1-beta_2)*(g_t*g_t) # 99.9% of previous (square grad), and 1% of current
         m_cap = m_t/(1-(beta_1**t))      #calculates the bias-corrected estimates
@@ -40,8 +43,7 @@ def Adam(m0, xm, ref, mkeep_opt):
         
         #xm_prev = xm
         xm = xm - (lr*m_cap)/(torch.sqrt(v_cap)+epsilon)
-        if comp < 1e-7:    #vgg+gram 1e-6
-            break
+        
             
     return comp, xm 
 
@@ -65,7 +67,7 @@ def bisection1(f, lower, upper, g, ref, init_loss, xm):
     m1, _ = f((xm+a*g),ref)
     m2, _ = f((xm+m*g),ref)
     m3, _ = f((xm+b*g),ref)
-    tol = 100
+    tol = 20
     x = 0.1
     
     while var == 1:
@@ -79,7 +81,7 @@ def bisection1(f, lower, upper, g, ref, init_loss, xm):
             m2, _ = f((xm+m*g),ref)
             #m3, _ = f(xm+b*g,ref)
             if flag > tol :
-                print('!!!!!!!!!!!')
+                #print('!!!!!!!!!!!')
                 break
             else:
                 flag += 1
@@ -94,7 +96,7 @@ def bisection1(f, lower, upper, g, ref, init_loss, xm):
             m2, _ = f((xm+m*g),ref)
             #m3, _ = f(xm+b*g,ref)
             if flag > tol :
-                print('!!!!!!!!!!!')
+                #print('!!!!!!!!!!!')
                 break
             else:
                 flag += 1
@@ -106,7 +108,7 @@ def bisection1(f, lower, upper, g, ref, init_loss, xm):
             m2, _ = f((xm+m*g),ref)
             m3, _ = f((xm+b*g),ref)
             if flag > tol :
-                print('!!!!!!!!!!!')
+               # print('!!!!!!!!!!!')
                 break
             else:
                 flag += 1
@@ -131,7 +133,7 @@ def bisection1(f, lower, upper, g, ref, init_loss, xm):
             m1, _ = f((xm+a*g),ref)
             m2, _ = f((xm+m*g),ref)
         elif flag > tol :
-            print('!!!!!!!!!!!')
+            #print('!!!!!!!!!!!')
             #print('temp comp:',f(xm+m*g,ref)[0]-obj )
             break
         else:
@@ -166,8 +168,8 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
     
     ################# 
     
-    xm = torch.sub(img.flatten(), torch.mul(lamda, gm))
-    #xm = torch.add(img.flatten(), torch.mul(lamda, gm))
+    #xm = torch.sub(img.flatten(), torch.mul(lamda, gm))
+    xm = torch.add(img.flatten(), torch.mul(lamda, gm))
     
     ##############################################
     xm = torch.clamp(xm, 0, 1)
@@ -201,7 +203,7 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
     
     """
     gn = mkeep(xm.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
-    comp, y = bisection1(mkeep, -1, -0, gn, ref, init_loss, xm)
+    comp, y = bisection1(mkeep, -2, -2, gn, ref, init_loss, xm)
     
     
     """
@@ -213,11 +215,13 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
 #        lamda = 0.9*lamda
 #        comp = 0
 #        y = img
-        print("try smaller lamda, now using adam!")
-        m0, _ = mse(img,ref)
-        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = mse_opt)
+        #print("try smaller lamda, now using adam!")
+#        m0, _ = mse(img,ref)
+#        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = mse_opt)
+        #m0, _ = model_gram_forward(img,ref)
+        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = model_gram_opt)
     
     
         
    
-    return y, comp, lamda2
+    return y, comp

@@ -100,7 +100,7 @@ def imshow(tensor, title=None):
     plt.imshow(image)
     if title is not None:
         plt.title(title)
-    plt.savefig('pebbles_blur5_1.jpg')
+    plt.savefig('radish_jpeg10_5.jpg')
     
     plt.show()
 
@@ -117,8 +117,8 @@ def imshow1(tensor, title=None):
     plt.show()
 # plt.figure()
 # imshow(ref_img, title='reference texture')
-ref_img = image_loader("./data/texture/pebbles.jpg")
-imgn = image_loader("./data/texture/blur_5_pebbles.jpg")
+ref_img = image_loader("./data/texture/radish.jpg")
+imgn = image_loader("./data/texture/jpeg_10_radish.jpg")
 _, nc, imsize,_ = ref_img.shape
 
 """
@@ -169,25 +169,30 @@ ref = ref_img.detach()
 iters = 50
 prev_loss = 0
 count = 0
-lamda2 = -0.01
+#lamda2 = -0.01
 #lamda = 0.01
 #frame = inspect.currentframe()          # define a frame to track
-#gpu_tracker = MemTracker(frame) 
+#gpu_tracker = MemTracker(frame)
+lamda = 0.1 
+start = time.time()
 for i in range(iterations):
     """
     compute lamda, loss1 and loss2
     
     """
-  
-    lamda = step_size(lamda0 = 0.02, opt = 1000, rate1 = 0.999, rate2 = 0.950, iteration = i)
+
+    
     
     if i%iters == 0:
+        end = time.time()
+        print('time per',iters,'iterations',end-start)
+        start = end
         print('iteration',i)
         print('lamda',lamda)    
     
     
     #gpu_tracker.track()
-    loss1, g1 = mse(input_img.detach(), ref.detach())
+    loss1, g1 = model_gram(input_img.detach(), ref.detach())
     if i ==0:
         m0 = loss1
     else:
@@ -208,8 +213,11 @@ for i in range(iterations):
         prev_loss = loss2
     
     #gpu_tracker.track()   
-    loss2, g2 = model_gram(input_img.detach(), ref.detach())
-    
+    loss2, g2 = mse(input_img.detach(), ref.detach())
+    if i == 0:
+        fix = lamda*torch.norm(g2) 
+    lamda = fix/torch.norm(g2) 
+    lamda = step_size(lamda0 = lamda, opt = 500, rate1 = 1, rate2 = 0.999, iteration = i)
     if i%iters == 0:
         print('\n')
         print('loss2',loss2)
@@ -236,7 +244,12 @@ for i in range(iterations):
 
     
     #gpu_tracker.track()
-    y, comp, lamda2 = search_grad(ref.detach(), g = g2, gkeep = g1, img = input_img.detach(), mkeep = mse, init_loss = m0, lamda = lamda, lamda2 = lamda2)
+    y, comp  = search_grad(ref.detach(), 
+                                  g = g2, gkeep = g1,
+                                  img = input_img.detach(), 
+                                  mkeep = model_gram, 
+                                  init_loss = m0, 
+                                  lamda = lamda)
     
 
     
@@ -247,7 +260,7 @@ for i in range(iterations):
         imshow(torch.clamp(y,0,1))
         torch.save(input_img,'temp.pt')
         print('\n\n\n')
-    if cu > 5:
+    if comp > 5:
         print('too big step size, change lamda!!')
         torch.save(input_img,'temp.pt')  
         break

@@ -15,7 +15,7 @@ imsize = 256
 nc = 3
 
 weight_mse = 2e4
-weight_gram = 1e5
+weight_gram = 1e4
 weight_ssim = 2e2
 
 
@@ -157,8 +157,8 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     
     return model, style_losses     #, content_losses
 
-model_style, style_losses = get_style_model_and_losses(cnn,
-          cnn_normalization_mean, cnn_normalization_std, ref_img, device = device)
+#model_style, style_losses = get_style_model_and_losses(cnn,
+#          cnn_normalization_mean, cnn_normalization_std, ref_img, device = device)
 
 def model_gram_forward(img, ref):
     
@@ -219,6 +219,9 @@ def model_gram_opt(m0, img, ref):
     
     img.requires_grad_()
     
+    model_style, style_losses = get_style_model_and_losses(cnn,
+          cnn_normalization_mean, cnn_normalization_std, ref, device = device)
+    
     model_style(img)
     style_score = 0
     for sl in style_losses:
@@ -230,7 +233,7 @@ def model_gram_opt(m0, img, ref):
     grad = img.grad.cpu()
     
     
-    del ref,img
+    del ref,img,model_style
     torch.cuda.empty_cache()
     
     return comp.cpu(), grad
