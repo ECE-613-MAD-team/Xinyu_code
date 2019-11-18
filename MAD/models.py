@@ -3,16 +3,37 @@ import torch.nn as nn
 import torch.nn.functional as F
 import copy
 import pytorch_ssim
+import torchvision.models as models
+import torchvision.transforms as transforms
+from PIL import Image
+
 #content_layers_default = ['conv_4']
-#style_layers_default = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
-style_layers_default = ['conv_1','pool_2', 'pool_4', 'pool_8', 'pool_12']
+style_layers_default = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
+#style_layers_default = ['conv_1','pool_2', 'pool_4', 'pool_8', 'pool_12']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+imsize = 256
+nc = 3
 
 weight_mse = 2e4
-weight_gram = 1e5
+weight_gram = 1e4
 weight_ssim = 2e2
 
 
+cnn_normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
+cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
+cnn = models.vgg19(pretrained=True).features.to(device).eval()
+
+loader = transforms.Compose([
+    transforms.Resize(imsize),  # scale imported image
+    transforms.ToTensor()])  # transform it into a torch tensor
+unloader = transforms.ToPILImage()  # reconvert into PIL image
+def image_loader(image_name):
+    image = Image.open(image_name)
+    # fake batch dimension required to fit network's input dimensions
+    image = loader(image).unsqueeze(0)
+    return image.to(torch.float)
+ref_img = image_loader("./data/texture/pebbles.jpg")
+ 
 class StyleLoss(nn.Module):
 
     def __init__(self, target_feature):
@@ -64,10 +85,14 @@ class Normalization(nn.Module):
         
 
 def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
-                               style_img, 
+                               style_img,
+                                device,
                                #content_img,
                                #content_layers=content_layers_default,
                                style_layers=style_layers_default):
+    
+    style_img = style_img.to(device)
+    
     cnn = copy.deepcopy(cnn)
 
     # normalization module
@@ -116,7 +141,7 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
             model.add_module("style_loss_{}".format(i), style_loss)
             style_losses.append(style_loss)
     
-    print(model)
+    #print(model)
     # now we trim off the layers after the last content and style losses
     for i in range(len(model) - 1, -1, -1):
 #         if isinstance(model[i], ContentLoss) or isinstance(model[i], StyleLoss):
@@ -126,39 +151,112 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
              break
 
     model = model[:(i + 1)]
-
+    
+    del style_img
+    torch.cuda.empty_cache()
+    
     return model, style_losses     #, content_losses
 
+#model_style, style_losses = get_style_model_and_losses(cnn,
+#          cnn_normalization_mean, cnn_normalization_std, ref_img, device = device)
 
-
-
-def model_gram(model, img, losses):
+def model_gram_forward(img, ref):
     
+    img = img.reshape(1,nc,imsize,imsize)
+    img = img.to(device)
+    ref = ref.to(device)
+    
+    
+    
+    model_style, style_losses = get_style_model_and_losses(cnn,
+          cnn_normalization_mean, cnn_normalization_std, ref, device)
+    
+    with torch.no_grad():
+        model_style(img)
+        
+    style_score = 0
+    for sl in style_losses:
+        style_score += weight_gram*sl.loss
+   
+    grad = 0
+    
+    del ref,img,model_style
+    torch.cuda.empty_cache()
+    
+    return style_score.cpu(), grad
+
+
+def model_gram(img, ref):
+    
+    img = img.reshape(1,nc,imsize,imsize)
+    img = img.to(device)
+    ref = ref.to(device)
     
     img.requires_grad_()
     
-    model(img)
+    model_style, style_losses = get_style_model_and_losses(cnn,
+          cnn_normalization_mean, cnn_normalization_std, ref, device)
+    
+    model_style(img)
     style_score = 0
-    for sl in losses:
+    for sl in style_losses:
         style_score += weight_gram*sl.loss
     style_score.backward()
+    grad = img.grad.cpu()
     
-    return style_score, img.grad.flatten()
+    del ref,img,model_style
+    torch.cuda.empty_cache()
+    return style_score.cpu(), grad.flatten()
+
+
+
+def model_gram_opt(m0, img, ref):
+
+    img = img.reshape(1,nc,imsize,imsize)
+    img = img.to(device)
+    ref = ref.to(device)
+    m0 = m0.to(device)
+    
+    img.requires_grad_()
+    
+    model_style, style_losses = get_style_model_and_losses(cnn,
+          cnn_normalization_mean, cnn_normalization_std, ref, device = device)
+    
+    model_style(img)
+    style_score = 0
+    for sl in style_losses:
+        style_score += weight_gram*sl.loss
+    comp = (m0-style_score)**2
+    
+    comp.backward()
+    
+    grad = img.grad.cpu()
+    
+    
+    del ref,img,model_style
+    torch.cuda.empty_cache()
+    
+    return comp.cpu(), grad
+
 
 def mse(img,ref):
+
     
-    _, nc, imsize, imsize = img.shape
+    img = img.reshape(1,nc,imsize,imsize)
     img.requires_grad_()
     
     N = nc*imsize*imsize
     loss = weight_mse*((img-ref)**2).sum() / (N)
     loss.backward()
-
+#    
+#    del ref
+#    torch.cuda.empty_cache()
     return loss, img.grad.flatten()
 
 def ssim(img, ref):
     
-    
+   
+    img = img.reshape(1,nc,imsize,imsize)
     img.requires_grad_()
     
     ssim_value = pytorch_ssim.ssim(ref, img)
@@ -166,12 +264,14 @@ def ssim(img, ref):
     ssim_out = -weight_ssim*ssim_loss(ref, img)
     ssim_out.backward()
     
+#    del ref
+#    torch.cuda.empty_cache()
     return ssim_value, img.grad.flatten()
 
 
 def mse_opt(m0, temp, ref):
     
-    _, nc, imsize, imsize = temp.shape
+    temp = temp.reshape(1,nc,imsize,imsize)
     temp.requires_grad_()
    
     N = nc*imsize*imsize
@@ -181,12 +281,13 @@ def mse_opt(m0, temp, ref):
     comp.backward()
 
     return comp, temp.grad
-
-
-
+#
+#
+#
 def ssim_opt(m0, temp, ref):
     
-    _, nc, imsize, imsize = temp.shape
+    temp = temp.reshape(1,nc,imsize,imsize)
+   # _, nc, imsize, imsize = temp.shape
     temp.requires_grad_()
     
     ssim_value = pytorch_ssim.ssim(ref, temp)
