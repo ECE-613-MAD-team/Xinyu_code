@@ -118,6 +118,39 @@ def gaussian_noise(k=8):
 
 # mad search
 
+def Adam(m0, xm, ref, mkeep_opt):
+    # 
+    xm = xm.reshape(1,nc,imsize,imsize)
+    lr = 2e-5  # vgg+gram 2e-5
+    beta_1 = 0.9
+    beta_2 = 0.999
+    epsilon = 1e-8
+
+    theta_0 = 0
+    m_t = 0 
+    v_t = 0 
+    t = 0
+    
+    var = 1
+    while var == 1:
+        t += 1
+        #print('t',t)
+        #if t > 10: 
+        #    lr = lr*0.9
+        comp, g_t = mkeep_opt(m0,xm,ref)
+        if comp < 1e-5:    #vgg+gram 1e-6mm0
+            break
+        m_t = beta_1*m_t + (1-beta_1)*g_t     # consider 90% of previous, and 10% of current
+        v_t = beta_2*v_t + (1-beta_2)*(g_t*g_t) # 99.9% of previous (square grad), and 1% of current
+        m_cap = m_t/(1-(beta_1**t))      #calculates the bias-corrected estimates
+        v_cap = v_t/(1-(beta_2**t))      #calculates the bias-corrected estimates
+        
+        #xm_prev = xm
+        xm = xm - (lr*m_cap)/(torch.sqrt(v_cap)+epsilon)
+        
+            
+    return comp, xm 
+
 def bisection(mkeep, lower, upper, g, ref, y_n, xm):
     y_n_loss, _ = mkeep(y_n, ref)
     a = lower
