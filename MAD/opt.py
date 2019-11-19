@@ -1,11 +1,13 @@
 import torch
 import numpy as np
 from models import *
+import time
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 nc = 3
 imszie = 256
-
+acount = 0
+count = 0
 
 """
 
@@ -16,8 +18,13 @@ Adam
 
 def Adam(m0, xm, ref, mkeep_opt):
     
+    global acount,count
+    acount = acount + 1
+   
+        
+    start = time.time()
     xm = xm.reshape(1,nc,imsize,imsize)
-    lr = 2e-5  # vgg+gram 2e-5
+    lr = 1e-5  # vgg+gram 2e-5
     beta_1 = 0.9
     beta_2 = 0.999
     epsilon = 1e-8
@@ -44,15 +51,41 @@ def Adam(m0, xm, ref, mkeep_opt):
         #xm_prev = xm
         xm = xm - (lr*m_cap)/(torch.sqrt(v_cap)+epsilon)
         
-            
+    end = time.time()
+    if count > 50:
+        print('Adam fre',acount/count,'\n')
+        print('Adam:',end-start,'s\n')
+        acount = 0
+        count = 0
     return comp, xm 
 
 """
 g: gradient at xm
 
 """
-def bisection1(f, lower, upper, g, ref, init_loss, xm):
-   
+def show(m0,model,xm,ref):
+    
+    xm = xm.flatten()
+    range = 0.1
+    N = 1000
+    vsearch = np.linspace(-range,range,N)
+    m,g = model(xm.detach(),ref)
+    comp = torch.abs(m0-m)
+    for i,v in enumerate(vsearch):
+        
+        x = xm + v*g 
+        m, _ = model(x,ref)
+        if i%20 == 0:
+            print(i,torch.abs(m0-m),m0,m,v)
+        if torch.abs(m0-m) < comp:
+            comp = torch.abs(m0-m)
+    print('\n',comp,'\n')
+def bisection(f, lower, upper, g, ref, init_loss, xm):
+    
+    
+    start = time.time()
+    global count
+    count = count + 1
     xm = xm.reshape(1,nc,imsize,imsize)
     obj = init_loss
     var = 1
@@ -67,17 +100,17 @@ def bisection1(f, lower, upper, g, ref, init_loss, xm):
     m1, _ = f((xm+a*g),ref)
     m2, _ = f((xm+m*g),ref)
     m3, _ = f((xm+b*g),ref)
-    tol = 20
-    x = 0.1
+    tol = 30
+    x = 0.01
     
     while var == 1:
        # if (f(xm+b*g,ref)[0]-obj) <= (f(xm+m*g,ref)[0]-obj) or (f(xm+m*g,ref)[0]-obj) <= (f(xm+a*g,ref)[0]-obj):
       
            
         if (m3-m2) <= 0  or (m2-m1) <= 0:
-            b = m
+            a = m
             m = (a+b)/2
-            m3, _ = f((xm+b*g),ref)
+            m1, _ = f((xm+a*g),ref)
             m2, _ = f((xm+m*g),ref)
             #m3, _ = f(xm+b*g,ref)
             if flag > tol :
@@ -148,6 +181,11 @@ def bisection1(f, lower, upper, g, ref, init_loss, xm):
 #    torch.cuda.empty_cache()
     
     comp = m2-obj
+    end = time.time()
+    if count%50 == 0:
+        
+        print('Bisection:',end-start,'s\n')
+       
     return comp, (xm + m*g)
 
 
@@ -159,7 +197,6 @@ def bisection1(f, lower, upper, g, ref, init_loss, xm):
 
 def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda = None, lamda2 = None):
     
-    _,nc,imsize,_ = img.shape
   
     #####   project
     gm = g - torch.mul(torch.div(torch.dot(g,gkeep), torch.dot(gkeep,gkeep)) ,gkeep)
@@ -196,14 +233,14 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
 #    comp = mk-init_loss
 #    y = xk.reshape(1,nc,imsize,imsize)
 
-
+    #show(init_loss.detach(),model_gram,xm.detach(),ref)
     """
     
     bisection
     
     """
     gn = mkeep(xm.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
-    comp, y = bisection1(mkeep, -2, -2, gn, ref, init_loss, xm)
+    comp, y = bisection(one_layer_forward, -0.1, 0.1, gn, ref, init_loss, xm)
     
     
     """
@@ -219,7 +256,7 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
 #        m0, _ = mse(img,ref)
 #        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = mse_opt)
         #m0, _ = model_gram_forward(img,ref)
-        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = mse_opt)
+        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = one_layer_opt)
     
     
         
