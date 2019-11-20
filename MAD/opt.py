@@ -3,6 +3,10 @@ import numpy as np
 from models import *
 import time
 
+from mse import *
+from ssim import *
+from one_layer import *
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 nc = 3
 imszie = 256
@@ -80,6 +84,8 @@ def show(m0,model,xm,ref):
         if torch.abs(m0-m) < comp:
             comp = torch.abs(m0-m)
     print('\n',comp,'\n')
+
+
 def bisection(f, lower, upper, g, ref, init_loss, xm):
     
     
@@ -240,7 +246,7 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
     
     """
     gn = mkeep(xm.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
-    comp, y = bisection(one_layer_forward, -0.1, 0.1, gn, ref, init_loss, xm)
+    comp, y = bisection(one_layer_forward, -0.05, 0.05, gn, ref, init_loss, xm)
     
     
     """
@@ -249,13 +255,6 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
     
     """
     if torch.abs(comp) > 0.01:
-#        lamda = 0.9*lamda
-#        comp = 0
-#        y = img
-        #print("try smaller lamda, now using adam!")
-#        m0, _ = mse(img,ref)
-#        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = mse_opt)
-        #m0, _ = model_gram_forward(img,ref)
         comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = one_layer_opt)
     
     
