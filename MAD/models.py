@@ -16,7 +16,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 imsize = 256
 nc = 3
 
-weight_gram = 2e3
+weight_gram = 5e3
 
 
 
@@ -157,8 +157,8 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     model = model[:(i + 1)]
     
    
-    del style_img
-    torch.cuda.empty_cache()
+    #del style_img
+    #torch.cuda.empty_cache()
 
     return model, style_losses     #, content_losses
 
@@ -184,8 +184,8 @@ def model_gram_forward(img, ref):
    
     grad = 0
     
-    del ref,img,model_style
-    torch.cuda.empty_cache()
+    #del ref,img,model_style
+    #torch.cuda.empty_cache()
     
     return style_score.cpu(), grad
 
@@ -208,8 +208,8 @@ def model_gram(img, ref):
     style_score.backward()
     grad = img.grad.cpu()
     
-    del ref,img,model_style
-    torch.cuda.empty_cache()
+    #del ref,img,model_style
+    #torch.cuda.empty_cache()
     return style_score.cpu(), grad.flatten()
 
 
@@ -238,8 +238,8 @@ def model_gram_opt(m0, img, ref):
     grad = img.grad.cpu()
     
     
-    del ref,img,model_style
-    torch.cuda.empty_cache()
+    #del ref,img,model_style
+    #torch.cuda.empty_cache()
     
     return comp.cpu(), grad
 

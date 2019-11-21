@@ -34,7 +34,7 @@ iterations = 10000
 
 
 
-ref_img = image_loader("./data/texture/pebbles.jpg")
+ref_img = image_loader("./data/texture/dotted_0126.jpg")
 ref_img = ref_img[:,:,0:256,0:256]
 #imgn = image_loader("./data/texture/jpeg_10_radish.jpg")
 
@@ -46,6 +46,8 @@ gaussian noise
 
 
 """
+seed = 999
+torch.manual_seed(seed)
 
 k = 10
 ref = ref_img * 255
@@ -67,14 +69,14 @@ imgn = torch.clamp(imgn,0,1)
 imgn.data.clamp_(0,1)
 input_img = imgn.detach()
 #input_img = torch.load('temp.pt')
-
 ref = ref_img.detach()
 
-iters = 10
+
+iters = 5
 prev_loss2 = 0
 count = 0
 #lamda2 = -0.01
-lamda = 0.1
+lamda = 0.08
 #frame = inspect.currentframe()          # define a frame to track
 #gpu_tracker = MemTracker(frame)
 start = time.time()
@@ -95,7 +97,8 @@ for i in range(iterations):
     
     
     #gpu_tracker.track()
-    loss1, g1 = one_layer(input_img.detach(), ref.detach())
+    # model which needed keep same
+    loss1, g1 = model_gram(input_img.detach(), ref.detach())
     if i ==0:
         m0 = loss1
     else:
@@ -103,8 +106,6 @@ for i in range(iterations):
     
     if i%iters == 0:
         print('loss1',loss1)
-        #plt.hist(g1.cpu(),1000)
-        #plt.show()
         print('g1',g1.max(),g1.min(),torch.mean(torch.abs(g1)))
     
 
@@ -115,7 +116,8 @@ for i in range(iterations):
     if i > 0:
         prev_loss2 = loss2
     #gpu_tracker.track()
-    loss2, g2 = model_gram(input_img.detach(), ref.detach())
+    # min/max this model
+    loss2, g2 = ssim(input_img.detach(), ref.detach())
     
         
     
@@ -125,12 +127,10 @@ for i in range(iterations):
     lamda = fix/torch.norm(g2) 
     if torch.abs(prev_loss2-loss2) < 1e-3*torch.abs(loss2):
         lamda = lamda*0.8
-    lamda = step_size(lamda0 = lamda, opt = 100, rate1 = 1, rate2 = 0.999, iteration = i)
+    lamda = step_size(lamda0 = lamda, opt = 50, rate1 = 1, rate2 = 0.995, iteration = i)
     if i%iters == 0:
-        print('\n')
+       # print('\n')
         print('loss2',loss2)
-        #plt.hist(g2.cpu(),1000)
-        #plt.show()
         print('g2',g2.max(),g2.min(),torch.mean(torch.abs(g2)))
     
 
@@ -152,23 +152,24 @@ for i in range(iterations):
 
     
     #gpu_tracker.track()
+    # change mkeep and xxx_opt in opt.py search_grad function
     y, comp  = search_grad(ref.detach(), 
                                   g = g2, gkeep = g1,
                                   img = input_img.detach(), 
-                                  mkeep = one_layer, 
+                                  mkeep = model_gram,
                                   init_loss = m0, 
                                   lamda = lamda)
     
 
     
     if i %iters == 0:
-        print('\n')
+        #print('\n')
         print('cumulate comp:', comp)
         plt.figure()
         imshow(torch.clamp(y,0,1))
         torch.save(input_img,'temp.pt')
         torch.save(fix,'temp_fix.pt')
-        print('\n\n\n')
+        print('\n\n')
     if comp > 5:
         print('too big step size, change lamda!!')
         torch.save(input_img,'temp.pt')  

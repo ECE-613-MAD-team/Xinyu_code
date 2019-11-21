@@ -81,9 +81,9 @@ def one_layer_forward(img, ref):
     grad = 0
 
 
-    del ref, img, onelayer
+    #del ref, img, onelayer
 
-    torch.cuda.empty_cache()
+    #torch.cuda.empty_cache()
 
 
     return style_score.cpu(), grad
@@ -108,8 +108,8 @@ def one_layer(img, ref):
     style_score.backward()
     grad = img.grad.cpu()
 
-    del ref, img, onelayer
-    torch.cuda.empty_cache()
+    #del ref, img, onelayer
+    #torch.cuda.empty_cache()
 
     return style_score.cpu(), grad.flatten()
 
@@ -141,7 +141,7 @@ def one_layer_opt(m0, img, ref):
 
 
 
-    del ref, img, onelayer
-    torch.cuda.empty_cache()
+    #del ref, img, onelayer
+    #torch.cuda.empty_cache()
 
     return comp.cpu(), grad

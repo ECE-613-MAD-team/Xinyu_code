@@ -28,7 +28,7 @@ def Adam(m0, xm, ref, mkeep_opt):
         
     start = time.time()
     xm = xm.reshape(1,nc,imsize,imsize)
-    lr = 1e-5  # vgg+gram 2e-5
+    lr = 2e-5  # vgg+gram 2e-5
     beta_1 = 0.9
     beta_2 = 0.999
     epsilon = 1e-8
@@ -246,7 +246,7 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
     
     """
     gn = mkeep(xm.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
-    comp, y = bisection(one_layer_forward, -0.05, 0.05, gn, ref, init_loss, xm)
+    comp, y = bisection(mkeep, -0.1, 0.1, gn, ref, init_loss, xm)
     
     
     """
@@ -255,7 +255,7 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
     
     """
     if torch.abs(comp) > 0.01:
-        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = one_layer_opt)
+        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = model_gram_opt)
     
     
         
