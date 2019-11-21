@@ -69,6 +69,7 @@ Maybe utilize some interesting points get from MAD comparison.
 * Gaussian
 * Blur
 * JPEG
+* Gamma
 * (Shahrukh's paper)
 
 ### Different levels
