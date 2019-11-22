@@ -159,45 +159,25 @@ def mse(img,ref):
     return loss, img.grad.flatten()
 
 def ssim(img, ref):
-    m_a1 = torch.cuda.memory_allocated(device)
-    m_c1 = torch.cuda.memory_cached(device)
 
-    #imgd = img.cuda()
-    # imgd = img.data.pin_memory().to(device, non_blocking=True)
-    # refd = ref.data.pin_memory().to(device, non_blocking=True)
-    imgd = img.to(device)
-    refd = ref.to(device)
-    
-    imgd.requires_grad_()
-    # print('memory allocated: ', (torch.cuda.memory_allocated(device)))
-    # print('memory cached   : ', torch.cuda.memory_cached(device))
-    
-    #ssim_value = pytorch_ssim.ssim(refd, imgd)
-   
+    img.requires_grad_()
     ssim_loss = pytorch_ssim.SSIM(window_size=11)
-    ssim_value = ssim_loss(refd, imgd)
+    ssim_value = ssim_loss(ref, img)
     ssim_out = -weight_ssim * ssim_value
     ssim_out.backward()
-    
-    
-    grad_return = imgd.grad.flatten().cpu()
-    value = ssim_value.cpu()
-    # it seems that no need to clean
-    imgd = imgd.cpu()
-    refd = refd.cpu()
-    ssim_out = ssim_out.cpu()
-    ssim_loss = ssim_loss.cpu()
-    
-    del ssim_value, ssim_loss, ssim_out, imgd, refd
-    torch.cuda.empty_cache()
-    print('total allocated        : ', torch.cuda.memory_allocated(device))
-    print('total cached           : ', torch.cuda.memory_cached(device))
-    print('memory allocated change: ', ( torch.cuda.memory_allocated(device) - m_a1 ) )
-    print('memory cached    change: ', ( torch.cuda.memory_cached(device) - m_c1 ) )
-    
-    # print('memory allocated11: ', (torch.cuda.memory_allocated(device)))
-    # print('memory cached   11: ', torch.cuda.memory_cached(device))
-    
-    #time.sleep(100000)
+    grad_return = img.grad.flatten()
 
-    return value, grad_return
+    return ssim_value, grad_return
+
+def ssim_opt(m0, temp, ref):
+    temp = temp.reshape(1, nc, imsize, imsize)
+
+    # _, nc, imsize, imsize = temp.shape
+    temp.requires_grad_()
+
+    ssim_loss = pytorch_ssim.SSIM()
+    ssim_out = -weight_ssim * ssim_loss(ref, temp)
+    comp = ((-weight_ssim * m0) - ssim_out) ** 2
+    comp.backward()
+
+    return comp, temp.grad

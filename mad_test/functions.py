@@ -12,22 +12,6 @@ import torchvision.models as models
 
 from models import *
 
-# TODO: to use names to control testing objects
-
-einstein = 'einstein'
-pebbles = 'pebble'
-image_tag = einstein
-
-"""
-
-brick_wall.jpg
-lacelike.jpg
-pebbles.jpg
-radish.jpg
-red-peppers.jpg
-
-"""
-
 # functions
 
 loader = transforms.Compose([
@@ -49,19 +33,6 @@ def image_loader(image_name):
     # fake batch dimension required to fit network's input dimensions
     image = loader(image).unsqueeze(0)
     return image.to(device, torch.float)
-
-def gram_matrix(input):
-    a, b, c, d = input.size()  # a=batch size(=1)
-    # b=number of feature maps
-    # (c,d)=dimensions of a f. map (N=c*d)
-
-    features = input.view(a * b, c * d)  # resise F_XL into \hat F_XL
-
-    G = torch.mm(features, features.t())  # compute the gram product
-
-    # we 'normalize' the values of the gram matrix
-    # by dividing by the number of element in each feature maps.
-    return G.div(a * b * c * d)
 
 # show and save
 def imshow(tensor, title=None):
@@ -98,9 +69,9 @@ jpeg
 """
 
 def gaussian_noise(img, k=8):
-    noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
+    noise = torch.randn(1, nc, imsize, imsize) * torch.sqrt( (torch.tensor([2.0])**k) ) 
     imgn = ( img + noise.to(device) ) / 255
-    imgn = torch.clamp(imgn,0,1)
+    imgn = torch.clamp(imgn, 0, 1)
     return imgn
 
 def blur_noise(img):
@@ -114,15 +85,13 @@ def gamma_noise(img):
 
 # mad search
 
-def Adam(m0, xm, ref, mkeep_opt):
-    # 
+def Adam(m0, xm, ref, mkeep_opt):    
     xm = xm.reshape(1,nc,imsize,imsize)
     lr = 2e-5  # vgg+gram 2e-5
     beta_1 = 0.9
     beta_2 = 0.999
     epsilon = 1e-8
 
-    theta_0 = 0
     m_t = 0 
     v_t = 0 
     t = 0
@@ -134,7 +103,7 @@ def Adam(m0, xm, ref, mkeep_opt):
         #if t > 10: 
         #    lr = lr*0.9
         comp, g_t = mkeep_opt(m0,xm,ref)
-        if comp < 1e-5:    #vgg+gram 1e-6mm0
+        if comp < 2e-5:    #vgg+gram 1e-6mm0
             break
         m_t = beta_1*m_t + (1-beta_1)*g_t     # consider 90% of previous, and 10% of current
         v_t = beta_2*v_t + (1-beta_2)*(g_t*g_t) # 99.9% of previous (square grad), and 1% of current
@@ -143,9 +112,8 @@ def Adam(m0, xm, ref, mkeep_opt):
         
         #xm_prev = xm
         xm = xm - (lr*m_cap)/(torch.sqrt(v_cap)+epsilon)
-        
-            
-    return comp, xm 
+
+    return comp, xm
 
 def bisection(mkeep, lower, upper, g, ref, y_n, xm):
     y_n_loss, _ = mkeep(y_n, ref)
@@ -175,15 +143,7 @@ def bisection(mkeep, lower, upper, g, ref, y_n, xm):
     comp = mkeep(xm+m*g, ref)[0] - y_n_loss
     return comp, (xm + m*g)
 
-def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, lamda = None, iterate = None):
-    # mad hold loss
-    # r = 0.5 - iterate * 0.001
-    # step = 5e-5 # for control of step
-    # N = r / step
-    # vsearch = np.linspace(r, 0, N+1)
-
-    # ref.to(device)
-    # img.to(device)
+def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, mkeep_opt = None, lamda = None, iterate = None, init_loss = None):
 
     y_n = img # current image
 
@@ -200,11 +160,7 @@ def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, lamda = No
     y_n_loss, _ = mkeep(y_n.detach(), ref.detach())
     # mkeep is used to calculate the loss from the holding method
     # loss from two gradient
-    m_a1 = torch.cuda.memory_allocated(device)
-    m_c1 = torch.cuda.memory_cached(device)
     y_n_prime_loss, g_1n_prime = mkeep(y_n_prime.detach(), ref.detach())
-    # print('memory allocated change: ', ( torch.cuda.memory_allocated(device) - m_a1 ) )
-    # print('memory cached    change: ', ( torch.cuda.memory_cached(device) - m_c1 ) )
 
     comp = torch.abs(y_n_prime_loss - y_n_loss)
     first_comp = comp
@@ -212,6 +168,7 @@ def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, lamda = No
 
     g_1n_prime_bi = mkeep(y_n_prime.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
     comp, y_n1 = bisection(mkeep, -1, 0, g_1n_prime_bi, ref, y_n, y_n_prime)
+    #comp, y_n1 = Adam(init_loss.detach(), y_n_prime, ref, mkeep_opt = mkeep_opt)
 
     y_n.cpu()
     g_n.cpu()
@@ -221,41 +178,6 @@ def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, lamda = No
     del ref, img, y_n, g_n, y_n_prime, g_1n_prime, g_1n_prime_bi
     torch.cuda.empty_cache()
 
-    # if comp == None:
-    #     y_n1 = y_n_prime
-    #     for i,v in enumerate(vsearch):
-    #         tep_img = y_n1.flatten() + v * g_1n_prime
-    #         tep_img = tep_img.reshape(1, nc, imsize, imsize)
-    #         tep_mkeep_loss, _ = mkeep(tep_img.detach(), ref.detach())
-    #         tep_comp =  torch.abs(tep_mkeep_loss - y_n_loss)
-            
-    #         # if i % 1000 == 0:
-    #         #     print('Current v: ' + str(v) + ', temp_comp: ' + str(tep_comp))
-    #         if tep_comp  < comp:
-    #             # v is correct
-    #             comp = tep_comp
-    #             y_n1 = tep_img
-                
-    #             if tep_comp < 5e-5:
-    #                 print("find one!")
-    #                 break
-    #         # else do not renew yn, just reduce v        
-
-    #         # For -v:
-    #         tep_img = y_n1.flatten() - v * g_1n_prime
-    #         tep_img = tep_img.reshape(1, nc, imsize, imsize)
-    #         tep_mkeep_loss, _ = mkeep(tep_img.detach(), ref.detach())
-    #         tep_comp =  torch.abs(tep_mkeep_loss - y_n_loss)
-            
-    #         # if i % 1000 == 0:
-    #         #     print('Current v: ' + str(v) + ', temp_comp: ' + str(tep_comp))
-    #         if tep_comp  < comp:
-    #             # v is correct
-    #             comp = tep_comp
-    #             y_n1 = tep_img
-                
-    #             if tep_comp < 5e-5:
-    #                 print("find one!")
-    #                 break
+    # gonna add adam to this
 
     return y_n1, first_comp

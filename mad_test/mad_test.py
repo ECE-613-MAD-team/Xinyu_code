@@ -27,6 +27,7 @@ direction = 0
 
 def mad_test(imgn, ref_img, hold, direction):
 
+    # load the model
     # model_style, style_losses = get_style_model_and_losses(cnn, cnn_normalization_mean, cnn_normalization_std, ref_img)
     # print('model load success!')
     # print(model_style)
@@ -34,7 +35,6 @@ def mad_test(imgn, ref_img, hold, direction):
     imgn.data.clamp_(0,1) # transition from [0,255] -> (0,1)?
     input_img = imgn.cpu().detach()
     ref = ref_img.cpu().detach()
-    cu = 0
 
     # mad search find the maximal / minimal
     iterations = 500
@@ -49,12 +49,12 @@ def mad_test(imgn, ref_img, hold, direction):
         #loss2, g2 = model_gram(model_style, input_img.detach(), style_losses)
         loss2, g2 = ssim(input_img.detach(), ref.detach())
         
+        # TODO: Need to change the hold
         if hold == 0:
             y, comp = search_grad(ref.detach(), g_2n = g2, g_1n = g1, direction = direction, img = input_img.detach(), mkeep = mse, lamda = lamuda, iterate = i)
         elif hold == 1:
             y, comp = search_grad(ref.detach(), g_2n = g2, g_1n = g1, direction = direction, img = input_img.detach(), mkeep = ssim, lamda = lamuda, iterate = i)
         
-        cu = cu + comp
         loss_keep, _ = mse(y.detach(), ref.detach())
         loss_change, _ = ssim(y.detach(), ref.detach())
         if i % 10 == 0:
@@ -63,21 +63,11 @@ def mad_test(imgn, ref_img, hold, direction):
             print('loss2:     ' + str(loss2))
             print('keep:      ' + str( torch.abs(loss_keep - loss1) ) )
             print('change:    ' + str( torch.abs(loss_change - loss2) ) )
-        #print('cumulate comp:', cu)
-        # if comp > 1:
-        #     torch.save(y,'temp.pt')  
-        #     break
-        
-        # if i % 10 == 0:
-        #     print('iterate: ' + str(i))
-        #     plt.figure()
-        #     imshow(torch.clamp(y,0,1))
+
             
         input_img = y
-        # ref.cpu()
-        # del y
-        # torch.cuda.empty_cache()
         
+        #early stop
         if comp < 1e-5:
             print('iteration: ' + str(i))
             print('loss1:     ' + str(loss1))
@@ -85,31 +75,21 @@ def mad_test(imgn, ref_img, hold, direction):
             print('keep:      ' + str( torch.abs(loss_keep - loss1) ) )
             print('change:    ' + str( torch.abs(loss_change - loss2) ) )
             print('comp: ' + str(comp))
-            # plt.figure()
-            # imshow(torch.clamp(y, 0, 1))
             break
-
-        
 
     return input_img
 
 if __name__ == "__main__":
     starttime = datetime.datetime.now()
 
+    #for every imgs
     for imgs in range(1, 2):
         image_tag = imgs
 
-        # load images
+        # load images and add noise
         ref_img = image_loader(load_path + str(image_tag) + ".jpg")
         ref = ref_img * 255
-        #noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
         imgn = gaussian_noise(ref)
-
-        # print(ref.detach().shape)
-        # plt.figure()
-        # imshow1(imgn, title='distorted image')
-
-        
 
         input_img = mad_test(imgn, ref_img, hold = 1, direction = 1)
 
