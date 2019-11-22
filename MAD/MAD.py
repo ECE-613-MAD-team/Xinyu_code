@@ -15,16 +15,7 @@ from one_layer import *
 import time
 import warnings
 warnings.filterwarnings("ignore")
-"""
-pebbles.jpg
-brick_wall.jpg
-lacelike.jpg
-radish.jpg
-red-peppers.jpg
 
-einstein.png
-
-"""
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -34,7 +25,7 @@ iterations = 10000
 
 
 
-ref_img = image_loader("./data/texture/dotted_0126.jpg")
+ref_img = image_loader("./data/texture/" + name + ".jpg")
 ref_img = ref_img[:,:,0:256,0:256]
 #imgn = image_loader("./data/texture/jpeg_10_radish.jpg")
 
@@ -49,12 +40,14 @@ gaussian noise
 seed = 999
 torch.manual_seed(seed)
 
-k = 10
-ref = ref_img * 255
-#noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
-noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
-imgn = (ref+noise) / 255
-imgn = torch.clamp(imgn,0,1)
+
+if Type == 'noise' :
+    imgn = gaussian_noise(float(level),ref_img)
+elif Type == 'blur' :
+    imgn = gaussian_blur(float(level),ref_img)
+else:
+    pass
+
 
 
 
@@ -72,14 +65,16 @@ input_img = imgn.detach()
 ref = ref_img.detach()
 
 
-iters = 5
+iters = 20
 prev_loss2 = 0
 count = 0
 #lamda2 = -0.01
-lamda = 0.08
+lamda = 0.12
 #frame = inspect.currentframe()          # define a frame to track
 #gpu_tracker = MemTracker(frame)
 start = time.time()
+
+
 for i in range(iterations):
     """
     compute lamda, loss1 and loss2
@@ -87,7 +82,10 @@ for i in range(iterations):
     """
 
     
+    """
     
+    print information
+    """
     if i%iters == 0:
         end = time.time()
         print('time per',iters,'iterations',end-start)
@@ -95,10 +93,18 @@ for i in range(iterations):
         print('iteration',i)
         print('lamda',lamda)    
     
-    
+
+
+    """
+    keep model
+    """
     #gpu_tracker.track()
     # model which needed keep same
-    loss1, g1 = model_gram(input_img.detach(), ref.detach())
+    if int(gd) == 1 or int(gd) == 2:
+         loss1, g1 = mse(input_img.detach(), ref.detach())
+    else:
+         loss1, g1 = model_gram(input_img.detach(), ref.detach())
+
     if i ==0:
         m0 = loss1
     else:
@@ -112,26 +118,40 @@ for i in range(iterations):
    
    
     
+    """
     
+    max/min model
+    
+    """
     if i > 0:
         prev_loss2 = loss2
     #gpu_tracker.track()
     # min/max this model
-    loss2, g2 = ssim(input_img.detach(), ref.detach())
+    if int(gd) == 1 or int(gd) == 2:
+        loss2, g2 = model_gram(input_img.detach(), ref.detach())
+    else:
+        loss2, g2 = mse(input_img.detach(), ref.detach())
+
+    if i%iters == 0:
+       # print('\n')
+        print('loss2',loss2)
+        print('g2',g2.max(),g2.min(),torch.mean(torch.abs(g2)))
+
     
         
+    """
     
+    adjust learning rate
+    
+    """
     if i == 0:
         fix = lamda*torch.norm(g2) 
         #fix = torch.load('temp_fix.pt')*0.1
     lamda = fix/torch.norm(g2) 
     if torch.abs(prev_loss2-loss2) < 1e-3*torch.abs(loss2):
         lamda = lamda*0.8
-    lamda = step_size(lamda0 = lamda, opt = 50, rate1 = 1, rate2 = 0.995, iteration = i)
-    if i%iters == 0:
-       # print('\n')
-        print('loss2',loss2)
-        print('g2',g2.max(),g2.min(),torch.mean(torch.abs(g2)))
+    lamda = step_size(lamda0 = lamda, opt = 100, rate1 = 1, rate2 = 1, iteration = i)
+
     
 
     
@@ -140,28 +160,41 @@ for i in range(iterations):
     
     """
     
-    if torch.abs(loss2-prev_loss2) < 5e-5*loss2: 
+    if torch.abs(loss2-prev_loss2) < 1e-4*loss2:
         count += 1
     else:
         count = 0
     
-    if count > 100:
+    if count > 20:
         print('early stopping!!')
         break
 
 
+    """
     
+    using MAD
+    
+    """
+    if int(gd) == 1 or int(gd) == 2:
+        mkeep = mse
+    else:
+        mkeep = model_gram
     #gpu_tracker.track()
     # change mkeep and xxx_opt in opt.py search_grad function
     y, comp  = search_grad(ref.detach(), 
                                   g = g2, gkeep = g1,
                                   img = input_img.detach(), 
-                                  mkeep = model_gram,
+                                  mkeep = mkeep,
                                   init_loss = m0, 
                                   lamda = lamda)
     
 
+
+    """
     
+    print information
+    
+    """
     if i %iters == 0:
         #print('\n')
         print('cumulate comp:', comp)

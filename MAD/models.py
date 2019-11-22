@@ -16,7 +16,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 imsize = 256
 nc = 3
 
-weight_gram = 5e3
+weight_gram = 5e4
 
 
 

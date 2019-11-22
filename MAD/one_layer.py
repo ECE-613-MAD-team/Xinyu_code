@@ -6,7 +6,7 @@ from models import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 n_feature_maps = 128
 scales = [3, 5, 7 ,11, 15, 23, 37, 55]
-weight_onelayer = 5e11
+weight_onelayer = 8e10
 imsize = 256
 nc = 3
 

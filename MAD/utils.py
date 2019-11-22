@@ -2,10 +2,20 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import numpy as np
+import cv2
 
 from PIL import Image
 import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
+
+method = 'Gram-Mse'
+
+level = '6'
+Type = 'blur'
+gd = '5'
+name = '13'
+suffix = Type+'_'+level+'_'+gd
 
 nc = 3
 imsize = 256
@@ -52,7 +62,7 @@ def imshow(tensor, title=None):
     plt.imshow(image)
     if title is not None:
         plt.title(title)
-    plt.savefig('dotted_0126_noise10_4.jpg')
+    plt.savefig(method+'_'+name+'_'+suffix+'.jpg')
 
     plt.show()
 
@@ -65,5 +75,25 @@ def imshow1(tensor, title=None):
     plt.imshow(image)
     if title is not None:
         plt.title(title)
-    plt.savefig('pebbles_noise6_3.jpg')
+    #plt.savefig('pebbles_noise6_3.jpg')
     plt.show()
+
+
+def gaussian_noise(level,ref):
+
+    ref = ref * 255
+    noise = torch.randn(1, nc, imsize, imsize) * torch.sqrt((torch.tensor([2.0]) ** level))
+    imgn = (ref + noise) / 255
+    imgn = torch.clamp(imgn, 0, 1)
+
+    return imgn
+
+def gaussian_blur(level,ref):
+
+    temp =  cv2.imread("./data/texture/" + name + ".jpg")
+    temp = cv2.GaussianBlur(temp,ksize = (0,0),sigmaX= level)
+    temp = temp[...,::-1]
+    temp = np.transpose(temp,(2,0,1))[np.newaxis,...]/255.0
+    imgn = torch.from_numpy(temp).float()
+
+    return imgn

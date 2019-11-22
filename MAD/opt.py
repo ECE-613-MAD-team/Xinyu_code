@@ -3,6 +3,7 @@ import numpy as np
 from models import *
 import time
 
+from utils import *
 from mse import *
 from ssim import *
 from one_layer import *
@@ -45,7 +46,7 @@ def Adam(m0, xm, ref, mkeep_opt):
         #if t > 10: 
         #    lr = lr*0.9
         comp, g_t = mkeep_opt(m0,xm,ref)
-        if comp < 1e-5:    #vgg+gram 1e-6mm0
+        if comp < 2e-5:    #vgg+gram 1e-6mm0
             break
         m_t = beta_1*m_t + (1-beta_1)*g_t     # consider 90% of previous, and 10% of current
         v_t = beta_2*v_t + (1-beta_2)*(g_t*g_t) # 99.9% of previous (square grad), and 1% of current
@@ -179,7 +180,7 @@ def bisection(f, lower, upper, g, ref, init_loss, xm):
             pass
          
             
-        if b-a < 1e-6:
+        if b-a < 1e-5:
              break
         
         
@@ -210,9 +211,10 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
     
     
     ################# 
-    
-    #xm = torch.sub(img.flatten(), torch.mul(lamda, gm))
-    xm = torch.add(img.flatten(), torch.mul(lamda, gm))
+    if int(gd) == 1 or int(gd) == 4:
+        xm = torch.sub(img.flatten(), torch.mul(lamda, gm))
+    else:
+        xm = torch.add(img.flatten(), torch.mul(lamda, gm))
     
     ##############################################
     xm = torch.clamp(xm, 0, 1)
@@ -246,7 +248,7 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
     
     """
     gn = mkeep(xm.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
-    comp, y = bisection(mkeep, -0.1, 0.1, gn, ref, init_loss, xm)
+    comp, y = bisection(mkeep, -0.2, 0.2, gn, ref, init_loss, xm)
     
     
     """
@@ -254,8 +256,12 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, init_loss = None, lamda
     Adam
     
     """
+    if int(gd) == 1 or int(gd) == 2:
+        opt = mse_opt
+    else:
+        opt = model_gram_opt
     if torch.abs(comp) > 0.01:
-        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = model_gram_opt)
+        comp, y = Adam(init_loss.detach(),xm,ref,mkeep_opt = opt)
     
     
         
