@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import copy
 import pytorch_ssim
+import time
 #content_layers_default = ['conv_4']
 #style_layers_default = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
 style_layers_default = ['conv_1','pool_2', 'pool_4', 'pool_8', 'pool_12']
@@ -13,7 +14,7 @@ weight_mse = 2e4
 weight_gram = 1e5
 weight_ssim = 2e2
 imsize = 256
-nc = 1
+nc = 3
 
 class StyleLoss(nn.Module):
 
@@ -158,11 +159,45 @@ def mse(img,ref):
     return loss, img.grad.flatten()
 
 def ssim(img, ref):
-    img.requires_grad_()
+    m_a1 = torch.cuda.memory_allocated(device)
+    m_c1 = torch.cuda.memory_cached(device)
+
+    #imgd = img.cuda()
+    # imgd = img.data.pin_memory().to(device, non_blocking=True)
+    # refd = ref.data.pin_memory().to(device, non_blocking=True)
+    imgd = img.to(device)
+    refd = ref.to(device)
     
-    ssim_value = pytorch_ssim.ssim(ref, img)
+    imgd.requires_grad_()
+    # print('memory allocated: ', (torch.cuda.memory_allocated(device)))
+    # print('memory cached   : ', torch.cuda.memory_cached(device))
+    
+    #ssim_value = pytorch_ssim.ssim(refd, imgd)
+   
     ssim_loss = pytorch_ssim.SSIM(window_size=11)
-    ssim_out = -weight_ssim * ssim_loss(ref, img)
+    ssim_value = ssim_loss(refd, imgd)
+    ssim_out = -weight_ssim * ssim_value
     ssim_out.backward()
     
-    return ssim_value, img.grad.flatten()
+    
+    grad_return = imgd.grad.flatten().cpu()
+    value = ssim_value.cpu()
+    # it seems that no need to clean
+    imgd = imgd.cpu()
+    refd = refd.cpu()
+    ssim_out = ssim_out.cpu()
+    ssim_loss = ssim_loss.cpu()
+    
+    del ssim_value, ssim_loss, ssim_out, imgd, refd
+    torch.cuda.empty_cache()
+    print('total allocated        : ', torch.cuda.memory_allocated(device))
+    print('total cached           : ', torch.cuda.memory_cached(device))
+    print('memory allocated change: ', ( torch.cuda.memory_allocated(device) - m_a1 ) )
+    print('memory cached    change: ', ( torch.cuda.memory_cached(device) - m_c1 ) )
+    
+    # print('memory allocated11: ', (torch.cuda.memory_allocated(device)))
+    # print('memory cached   11: ', torch.cuda.memory_cached(device))
+    
+    #time.sleep(100000)
+
+    return value, grad_return

@@ -63,21 +63,6 @@ def gram_matrix(input):
     # by dividing by the number of element in each feature maps.
     return G.div(a * b * c * d)
 
-class Normalization(nn.Module):
-    def __init__(self, mean, std):
-        super(Normalization, self).__init__()
-        # .view the mean and std to make them [C x 1 x 1] so that they can
-        # directly work with image Tensor of shape [B x C x H x W].
-        # B is batch size. C is number of channels. H is height and W is width.
-        # self.mean = torch.tensor(mean).view(-1, 1, 1)
-        # self.std = torch.tensor(std).view(-1, 1, 1)
-        self.mean = mean.clone().detach().requires_grad_(True).view(-1, 1, 1)
-        self.std = std.clone().detach().requires_grad_(True).view(-1, 1, 1)
-
-    def forward(self, img):
-        # normalize img
-        return (img - self.mean) / self.std
-
 # show and save
 def imshow(tensor, title=None):
     tensor = torch.clamp(tensor,0,1)
@@ -112,9 +97,20 @@ jpeg
 
 """
 
-def gaussian_noise(k=8):
+def gaussian_noise(img, k=8):
     noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
-    return noise
+    imgn = ( img + noise.to(device) ) / 255
+    imgn = torch.clamp(imgn,0,1)
+    return imgn
+
+def blur_noise(img):
+    return img
+
+def jpeg_noise(img):
+    return img
+
+def gamma_noise(img):
+    return img
 
 # mad search
 
@@ -156,7 +152,7 @@ def bisection(mkeep, lower, upper, g, ref, y_n, xm):
     a = lower
     b = upper
     m = (a+b)/2
-    while b - a > 1e-8:
+    while b - a > 1e-5:
         loss_a = mkeep(xm+a*g, ref)[0] - y_n_loss
         loss_m = mkeep(xm+m*g, ref)[0] - y_n_loss
         loss_b = mkeep(xm+b*g, ref)[0] - y_n_loss
@@ -179,33 +175,51 @@ def bisection(mkeep, lower, upper, g, ref, y_n, xm):
     comp = mkeep(xm+m*g, ref)[0] - y_n_loss
     return comp, (xm + m*g)
 
-def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None, iterate = None):
+def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, lamda = None, iterate = None):
     # mad hold loss
-    r = 0.5 - iterate * 0.001
-    step = 5e-5 # for control of step
-    N = r / step
-    vsearch = np.linspace(r, 0, N+1)
+    # r = 0.5 - iterate * 0.001
+    # step = 5e-5 # for control of step
+    # N = r / step
+    # vsearch = np.linspace(r, 0, N+1)
+
+    # ref.to(device)
+    # img.to(device)
 
     y_n = img # current image
 
     g_n = g_2n - torch.mul(torch.div(torch.dot(g_2n, g_1n), torch.dot(g_1n, g_1n)), g_1n)
 
     #y_n_prime = torch.sub(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
-    y_n_prime = torch.add(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
+    if direction == 0:
+        y_n_prime = torch.add(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
+    elif direction == 1:
+        y_n_prime = torch.sub(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
     # sub or add depends on the maximal or minimal opt goal
     #print('y_n_prime - y_n: ', (y_n_prime - y_n).sum() )
     
     y_n_loss, _ = mkeep(y_n.detach(), ref.detach())
     # mkeep is used to calculate the loss from the holding method
     # loss from two gradient
+    m_a1 = torch.cuda.memory_allocated(device)
+    m_c1 = torch.cuda.memory_cached(device)
     y_n_prime_loss, g_1n_prime = mkeep(y_n_prime.detach(), ref.detach())
-    
+    # print('memory allocated change: ', ( torch.cuda.memory_allocated(device) - m_a1 ) )
+    # print('memory cached    change: ', ( torch.cuda.memory_cached(device) - m_c1 ) )
+
     comp = torch.abs(y_n_prime_loss - y_n_loss)
     first_comp = comp
     #print('comp', comp) # current loss error for the holding method
 
     g_1n_prime_bi = mkeep(y_n_prime.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
     comp, y_n1 = bisection(mkeep, -1, 0, g_1n_prime_bi, ref, y_n, y_n_prime)
+
+    y_n.cpu()
+    g_n.cpu()
+    y_n_prime.cpu()
+    g_1n_prime.cpu()
+    g_1n_prime_bi.cpu()
+    del ref, img, y_n, g_n, y_n_prime, g_1n_prime, g_1n_prime_bi
+    torch.cuda.empty_cache()
 
     # if comp == None:
     #     y_n1 = y_n_prime
