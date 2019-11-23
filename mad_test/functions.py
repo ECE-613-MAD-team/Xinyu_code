@@ -143,7 +143,7 @@ def bisection(mkeep, lower, upper, g, ref, y_n, xm):
     comp = mkeep(xm+m*g, ref)[0] - y_n_loss
     return comp, (xm + m*g)
 
-def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, mkeep_opt = None, lamda = None, iterate = None, init_loss = None):
+def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, mkeep_opt = None, lamda = None, init_loss = None):
 
     y_n = img # current image
 
@@ -160,23 +160,21 @@ def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, mkeep_opt 
     y_n_loss, _ = mkeep(y_n.detach(), ref.detach())
     # mkeep is used to calculate the loss from the holding method
     # loss from two gradient
-    y_n_prime_loss, g_1n_prime = mkeep(y_n_prime.detach(), ref.detach())
+    y_n_prime_loss, _ = mkeep(y_n_prime.detach(), ref.detach())
 
     comp = torch.abs(y_n_prime_loss - y_n_loss)
     first_comp = comp
     #print('comp', comp) # current loss error for the holding method
 
     g_1n_prime_bi = mkeep(y_n_prime.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
-    comp, y_n1 = bisection(mkeep, -1, 0, g_1n_prime_bi, ref, y_n, y_n_prime)
+    comp, y_n1 = bisection(mkeep, -5, 0, g_1n_prime_bi, ref, y_n, y_n_prime)
+    # print('enter adam')
+    if torch.abs(comp) > 0.01:
+        comp, y_n1 = Adam(init_loss.detach(), y_n_prime, ref, mkeep_opt = mkeep_opt)
+
     #comp, y_n1 = Adam(init_loss.detach(), y_n_prime, ref, mkeep_opt = mkeep_opt)
 
-    y_n.cpu()
-    g_n.cpu()
-    y_n_prime.cpu()
-    g_1n_prime.cpu()
-    g_1n_prime_bi.cpu()
-    del ref, img, y_n, g_n, y_n_prime, g_1n_prime, g_1n_prime_bi
-    torch.cuda.empty_cache()
+
 
     # gonna add adam to this
 

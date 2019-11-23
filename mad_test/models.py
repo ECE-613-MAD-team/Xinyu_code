@@ -158,6 +158,17 @@ def mse(img,ref):
 
     return loss, img.grad.flatten()
 
+def mse_opt(m0, temp, ref):
+    temp = temp.reshape(1, nc, imsize, imsize)
+    temp.requires_grad_()
+
+    N = nc * imsize * imsize
+    loss_mse = weight_mse * ((temp - ref) ** 2).sum() / (N)
+    comp = (m0 - loss_mse) ** 2
+    comp.backward()
+
+    return comp, temp.grad
+
 def ssim(img, ref):
 
     img.requires_grad_()
