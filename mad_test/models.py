@@ -12,7 +12,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #constants
 weight_mse = 2e4
 weight_gram = 1e5
-weight_ssim = 2e2
+weight_ssim = 2e3
 imsize = 256
 nc = 3
 
@@ -186,7 +186,7 @@ def ssim_opt(m0, temp, ref):
     # _, nc, imsize, imsize = temp.shape
     temp.requires_grad_()
 
-    ssim_loss = pytorch_ssim.SSIM()
+    ssim_loss = pytorch_ssim.SSIM(window_size=11)
     ssim_out = -weight_ssim * ssim_loss(ref, temp)
     comp = ((-weight_ssim * m0) - ssim_out) ** 2
     comp.backward()
