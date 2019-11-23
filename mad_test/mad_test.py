@@ -64,6 +64,10 @@ def model_const(hold):
 
 def mad_test(imgn, ref_img, hold, direction):
 
+    # draw the pic of loss to certify the correctness of adam
+    # xx = []
+    # yy = []
+
     # load the model
     # model_style, style_losses = get_style_model_and_losses(cnn, cnn_normalization_mean, cnn_normalization_std, ref_img)
     # print('model load success!')
@@ -76,7 +80,7 @@ def mad_test(imgn, ref_img, hold, direction):
     lamda2 = -1
 
     # mad search find the maximal / minimal
-    iterations = 500
+    iterations = 1000
     for i in range(iterations):
         #lamuda = 0.1 - i * 0.00015
         
@@ -105,11 +109,13 @@ def mad_test(imgn, ref_img, hold, direction):
         
         loss_keep, _ = mkeep(y.detach(), ref.detach())
         loss_change, _ = mchange(y.detach(), ref.detach())
+        # xx.append(i)
+        # yy.append(float(loss_change))
         #print('iter: ', i, 'change: ', loss_change, 'keep', loss_keep, 'comp: ', comp, 'lamda2: ', lamda2)
         if i % 10 == 0:
             print('iteration  : ' + str(i))
             print('keep       : ' + str(loss_keep))
-            print('change     : ' + str(loss_change))
+            print('change     : ' + str(float(loss_change)))
             print('keep step  : ' + str( torch.abs(loss_keep - loss1) ) )
             print('change step: ' + str( torch.abs(loss_change - loss2) ) )
 
@@ -127,13 +133,16 @@ def mad_test(imgn, ref_img, hold, direction):
             print('comp       : ' + str(comp))
             break
 
+    # plt.plot(xx, yy)  
+    # plt.savefig('./loss_2_' + str(direction) + '.jpg') 
+
     return input_img
 
 if __name__ == "__main__":
     starttime = datetime.datetime.now()
 
     #for every imgs
-    for imgs in range(0, 35):
+    for imgs in range(1, 35):
         image_tag = imgs
 
         # load images and add noise
@@ -147,7 +156,7 @@ if __name__ == "__main__":
             imgn = noise_use(ref)
 
             # for every hold and direction
-            for h in range(1, 2):
+            for h in range(0, 2):
                 for d in range(0, 2):
                     input_img = mad_test(imgn, ref_img, hold = h, direction = d)
 
@@ -168,7 +177,6 @@ if __name__ == "__main__":
                     if not os.path.exists(save_dir):
                         os.makedirs(save_dir)
                     image.save(save_file, dpi=(300, 300))
-
-
+         
     endtime = datetime.datetime.now()
     print ('total time: ' + str((endtime - starttime).seconds) + 's')

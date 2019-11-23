@@ -91,7 +91,7 @@ def prof_wang(mkeep, ref, xm, lamda2, gkeep, init_loss):
     
     temp_im = xm + lamda2*gkeep
     mt, _ = mkeep(temp_im.detach() ,ref)
-    lamda2 = lamda2*(init_loss - mb)/(mt - mb + 1e-6)
+    lamda2 = (lamda2*(init_loss - mb)/(mt - mb + 1e-6)).detach()
     xk = xm + lamda2*gkeep
     mk, _ = mkeep(xk.detach() ,ref)
     comp = mk-init_loss
@@ -251,6 +251,14 @@ def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, mkeep_opt 
         y_n_prime = torch.add(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
     elif direction == 1:
         y_n_prime = torch.sub(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
+
+    # citation
+    ##############################################
+    y_n_prime = torch.clamp(y_n_prime, 0, 1)
+    dim = torch.clamp((y_n_prime-ref), -1, 1)
+    y_n_prime = ref + dim
+    ################################################
+
     # sub or add depends on the maximal or minimal opt goal
     #print('y_n_prime - y_n: ', (y_n_prime - y_n).sum() )
     
@@ -266,8 +274,8 @@ def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, mkeep_opt 
     g_1n_prime_bi = mkeep(y_n_prime.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
     #comp, y_n1 = bisection(mkeep, -5, 0, g_1n_prime_bi, ref, y_n, y_n_prime)
     comp, y_n1, lamda2_prime = prof_wang(mkeep, ref, y_n_prime.detach(), lamda2, g_1n_prime_bi, init_loss)
-    #if torch.abs(comp) > 0.01:
-    comp, y_n1 = bisection(mkeep, -5, 0, g_1n_prime_bi, ref, y_n, y_n_prime)
+    if torch.abs(comp) > 0.01:
+        comp, y_n1 = bisection(mkeep, -5, 0, g_1n_prime_bi, ref, y_n, y_n_prime)
         #comp, y_n1 = bisection1(mkeep, -0.1, 0.1, g_1n_prime_bi, ref, init_loss, y_n_prime)
     if torch.abs(comp) > 0.01:
         print('enter adam')
