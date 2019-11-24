@@ -142,7 +142,7 @@ if __name__ == "__main__":
     starttime = datetime.datetime.now()
 
     #for every imgs
-    for imgs in range(1, 2):
+    for imgs in range(1, 35):
         image_tag = imgs
 
         # load images and add noise
@@ -155,8 +155,8 @@ if __name__ == "__main__":
 
             imgn = noise_use(ref)
 
-            imgshow = imgn
-            imshow1(imgshow, title='distorted image')
+            # imgshow = imgn
+            # imshow1(imgshow, title='distorted image')
 
             # for every hold and direction
             for h in range(0, 2):
