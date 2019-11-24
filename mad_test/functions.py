@@ -3,7 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import copy
 import pytorch_ssim
-import numpy as np
+import numpy as numpy
+import cv2
+import kornia
 
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -54,7 +56,7 @@ def imshow1(tensor, title=None):
     plt.imshow(image, cmap='gray')
     if title is not None:
         plt.title(title)
-    plt.savefig(image_tag+'_origin.jpg', dpi = 300)
+    plt.savefig('distort_origin.jpg', dpi = 300)
     plt.show()
 
 # noise
@@ -74,8 +76,12 @@ def gaussian_noise(img, k=8):
     imgn = torch.clamp(imgn, 0, 1)
     return imgn
 
-def blur_noise(img):
-    return img
+def blur_noise(img, kernal=3, sigma=1.5):
+    gauss = kornia.filters.GaussianBlur2d( (kernal, kernal), (sigma, sigma) )
+    imgn = gauss(img) / 255
+    imgn = torch.clamp(imgn, 0, 1)
+
+    return imgn
 
 def jpeg_noise(img):
     return img
