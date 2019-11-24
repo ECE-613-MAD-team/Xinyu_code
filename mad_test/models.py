@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import copy
 import pytorch_ssim
+import time
 #content_layers_default = ['conv_4']
 #style_layers_default = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
 style_layers_default = ['conv_1','pool_2', 'pool_4', 'pool_8', 'pool_12']
@@ -11,9 +12,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #constants
 weight_mse = 2e4
 weight_gram = 1e5
-weight_ssim = 2e2
+weight_ssim = 2e3
 imsize = 256
-nc = 1
+nc = 3
 
 class StyleLoss(nn.Module):
 
@@ -157,12 +158,37 @@ def mse(img,ref):
 
     return loss, img.grad.flatten()
 
+def mse_opt(m0, temp, ref):
+    temp = temp.reshape(1, nc, imsize, imsize)
+    temp.requires_grad_()
+
+    N = nc * imsize * imsize
+    loss_mse = weight_mse * ((temp - ref) ** 2).sum() / (N)
+    comp = (m0 - loss_mse) ** 2
+    comp.backward()
+
+    return comp, temp.grad
+
 def ssim(img, ref):
+
     img.requires_grad_()
-    
-    ssim_value = pytorch_ssim.ssim(ref, img)
     ssim_loss = pytorch_ssim.SSIM(window_size=11)
-    ssim_out = -weight_ssim * ssim_loss(ref, img)
+    ssim_value = ssim_loss(ref, img)
+    ssim_out = -weight_ssim * ssim_value
     ssim_out.backward()
-    
-    return ssim_value, img.grad.flatten()
+    grad_return = img.grad.flatten()
+
+    return ssim_value, grad_return
+
+def ssim_opt(m0, temp, ref):
+    temp = temp.reshape(1, nc, imsize, imsize)
+
+    # _, nc, imsize, imsize = temp.shape
+    temp.requires_grad_()
+
+    ssim_loss = pytorch_ssim.SSIM(window_size=11)
+    ssim_out = -weight_ssim * ssim_loss(ref, temp)
+    comp = ((-weight_ssim * m0) - ssim_out) ** 2
+    comp.backward()
+
+    return comp, temp.grad

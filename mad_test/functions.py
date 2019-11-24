@@ -3,7 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import copy
 import pytorch_ssim
-import numpy as np
+import numpy as numpy
+import kornia
+import os
+import torchvision
 
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -11,22 +14,8 @@ import torchvision.transforms as transforms
 import torchvision.models as models
 
 from models import *
-
-# TODO: to use names to control testing objects
-
-einstein = 'einstein'
-pebbles = 'pebble'
-image_tag = einstein
-
-"""
-
-brick_wall.jpg
-lacelike.jpg
-pebbles.jpg
-radish.jpg
-red-peppers.jpg
-
-"""
+from io import StringIO
+from io import BytesIO
 
 # functions
 
@@ -50,34 +39,6 @@ def image_loader(image_name):
     image = loader(image).unsqueeze(0)
     return image.to(device, torch.float)
 
-def gram_matrix(input):
-    a, b, c, d = input.size()  # a=batch size(=1)
-    # b=number of feature maps
-    # (c,d)=dimensions of a f. map (N=c*d)
-
-    features = input.view(a * b, c * d)  # resise F_XL into \hat F_XL
-
-    G = torch.mm(features, features.t())  # compute the gram product
-
-    # we 'normalize' the values of the gram matrix
-    # by dividing by the number of element in each feature maps.
-    return G.div(a * b * c * d)
-
-class Normalization(nn.Module):
-    def __init__(self, mean, std):
-        super(Normalization, self).__init__()
-        # .view the mean and std to make them [C x 1 x 1] so that they can
-        # directly work with image Tensor of shape [B x C x H x W].
-        # B is batch size. C is number of channels. H is height and W is width.
-        # self.mean = torch.tensor(mean).view(-1, 1, 1)
-        # self.std = torch.tensor(std).view(-1, 1, 1)
-        self.mean = mean.clone().detach().requires_grad_(True).view(-1, 1, 1)
-        self.std = std.clone().detach().requires_grad_(True).view(-1, 1, 1)
-
-    def forward(self, img):
-        # normalize img
-        return (img - self.mean) / self.std
-
 # show and save
 def imshow(tensor, title=None):
     tensor = torch.clamp(tensor,0,1)
@@ -98,7 +59,7 @@ def imshow1(tensor, title=None):
     plt.imshow(image, cmap='gray')
     if title is not None:
         plt.title(title)
-    plt.savefig(image_tag+'_origin.jpg', dpi = 300)
+    plt.savefig('distort_origin.jpg', dpi = 300)
     plt.show()
 
 # noise
@@ -112,34 +73,82 @@ jpeg
 
 """
 
-def gaussian_noise(k=8):
-    noise = torch.randn(1,nc,imsize,imsize)*torch.sqrt((torch.tensor([2.0])**k)) 
-    return noise
+def gaussian_noise(img, k=8):
+    noise = torch.randn(1, nc, imsize, imsize) * torch.sqrt( (torch.tensor([2.0])**k) ) 
+    imgn = ( img + noise.to(device) ) / 255
+    imgn = torch.clamp(imgn, 0, 1)
+    return imgn
+
+def blur_noise(img, kernal=3, sigma=6):
+    gauss = kornia.filters.GaussianBlur2d( (kernal, kernal), (sigma, sigma) )
+    imgn = gauss(img) / 255
+    imgn = torch.clamp(imgn, 0, 1)
+
+    return imgn
+
+def jpeg_noise(img):
+    img /= 255
+    img = torch.clamp(img, 0, 1)
+    temp = img.cpu().clone() 
+    temp = temp.squeeze(0) 
+    temp = unloader(temp)
+    noise_os = os.path.join('./jpeg_noise.jpeg')
+    temp.save(noise_os, "JPEG", quality=25)
+    imgn = image_loader(noise_os)
+    # finally give up using buffer ...
+    #buffer = BytesIO()
+    # buffer.seek(0)
+    # contents = buffer.getvalue()
+    # image = Image.frombuffer("L", (imsize, imsize), contents, 'raw', "L", 0, 1)
+    # image = loader(image).unsqueeze(0)
+    return imgn
+
+def gamma_noise(img, gamma=2):
+    img /= 255
+    img = torch.clamp(img, 0, 1)
+    temp = img.cpu().clone() 
+    temp = temp.squeeze(0) 
+    temp = unloader(temp)
+    image = torchvision.transforms.functional.adjust_gamma(temp, gamma, gain=1)
+    image = loader(image).unsqueeze(0)
+    image = torch.clamp(image, 0, 1)
+    return image.to(device, torch.float)
 
 # mad search
 
-def Adam(m0, xm, ref, mkeep_opt):
-    # 
+def prof_wang(mkeep, ref, xm, lamda2, gkeep, init_loss):
+    # citation:
+    mb, _ = mkeep(xm ,ref)
+    
+    temp_im = xm + lamda2*gkeep
+    mt, _ = mkeep(temp_im.detach() ,ref)
+    lamda2 = (lamda2*(init_loss - mb)/(mt - mb + 1e-6)).detach()
+    xk = xm + lamda2*gkeep
+    mk, _ = mkeep(xk.detach() ,ref)
+    comp = mk-init_loss
+    y = xk.reshape(1,nc,imsize,imsize)
+    return comp, y, lamda2
+
+def Adam(m0, xm, ref, mkeep_opt):    
     xm = xm.reshape(1,nc,imsize,imsize)
     lr = 2e-5  # vgg+gram 2e-5
     beta_1 = 0.9
     beta_2 = 0.999
     epsilon = 1e-8
 
-    theta_0 = 0
     m_t = 0 
     v_t = 0 
     t = 0
     
-    var = 1
-    while var == 1:
+    comp = 10
+    while comp > 1e-4: #vgg+gram 1e-6mm0
         t += 1
+        if t > 1e3:
+            break
         #print('t',t)
         #if t > 10: 
         #    lr = lr*0.9
         comp, g_t = mkeep_opt(m0,xm,ref)
-        if comp < 1e-5:    #vgg+gram 1e-6mm0
-            break
         m_t = beta_1*m_t + (1-beta_1)*g_t     # consider 90% of previous, and 10% of current
         v_t = beta_2*v_t + (1-beta_2)*(g_t*g_t) # 99.9% of previous (square grad), and 1% of current
         m_cap = m_t/(1-(beta_1**t))      #calculates the bias-corrected estimates
@@ -147,16 +156,19 @@ def Adam(m0, xm, ref, mkeep_opt):
         
         #xm_prev = xm
         xm = xm - (lr*m_cap)/(torch.sqrt(v_cap)+epsilon)
-        
-            
-    return comp, xm 
+
+    return comp, xm
 
 def bisection(mkeep, lower, upper, g, ref, y_n, xm):
     y_n_loss, _ = mkeep(y_n, ref)
     a = lower
     b = upper
     m = (a+b)/2
-    while b - a > 1e-8:
+    t = 0
+    while b - a > 1e-5:
+        t += 1
+        if t > 1e2:
+            break
         loss_a = mkeep(xm+a*g, ref)[0] - y_n_loss
         loss_m = mkeep(xm+m*g, ref)[0] - y_n_loss
         loss_b = mkeep(xm+b*g, ref)[0] - y_n_loss
@@ -179,69 +191,131 @@ def bisection(mkeep, lower, upper, g, ref, y_n, xm):
     comp = mkeep(xm+m*g, ref)[0] - y_n_loss
     return comp, (xm + m*g)
 
-def search_grad(ref, g_1n, g_2n, img = None, mkeep = None, lamda = None, iterate = None):
-    # mad hold loss
-    r = 0.5 - iterate * 0.001
-    step = 5e-5 # for control of step
-    N = r / step
-    vsearch = np.linspace(r, 0, N+1)
+def bisection1(f, lower, upper, g, ref, init_loss, xm):
+    xm = xm.reshape(1,nc,imsize,imsize)
+    obj = init_loss
+    var = 1
+    a = lower
+    b = upper
+    m = (a+b)/2
+    flag = 0
+    m1, _ = f((xm+a*g),ref)
+    m2, _ = f((xm+m*g),ref)
+    m3, _ = f((xm+b*g),ref)
+    tol = 30
+    x = 0.01
+    
+    while var == 1:            
+        if (m3-m2) <= 0  or (m2-m1) <= 0:
+            a = m
+            m = (a+b)/2
+            m1, _ = f((xm+a*g),ref)
+            m2, _ = f((xm+m*g),ref)
+            #m3, _ = f(xm+b*g,ref)
+            if flag > tol :
+                #print('!!!!!!!!!!!')
+                break
+            else:
+                flag += 1
+                continue
+        
+        if (m1-obj) > 0 and (m3-obj) > 0: 
+            a = a-x
+            m = (a+b)/2
+            m1, _ = f((xm+a*g),ref)
+            m2, _ = f((xm+m*g),ref)
+            #m3, _ = f(xm+b*g,ref)
+            if flag > tol :
+                #print('!!!!!!!!!!!')
+                break
+            else:
+                flag += 1
+                continue
+        elif (m1-obj) < 0 and (m3-obj) < 0:
+            b = b+x
+            m = (a+b)/2
+            #m1, _ = f(xm+a*g,ref)
+            m2, _ = f((xm+m*g),ref)
+            m3, _ = f((xm+b*g),ref)
+            if flag > tol :
+               # print('!!!!!!!!!!!')
+                break
+            else:
+                flag += 1
+                continue
+        else:
+            pass
+        
+        if (m3-obj) < 0 or (m1-obj) > 0:
+            continue
+        
+        if (m1-obj)*(m2-obj) <= 0:
+            b = m
+            m = (a+b)/2
+            m2, _ = f((xm+m*g),ref)
+            m3, _ = f((xm+b*g),ref)
+        elif (m2-obj)*(m3-obj) <= 0:
+            a = m
+            m = (a+b)/2
+            m1, _ = f((xm+a*g),ref)
+            m2, _ = f((xm+m*g),ref)
+        elif flag > tol :
+            break
+        else:
+            pass
+         
+        if b-a < 1e-6:
+             break
+        
+    comp = m2-obj
+       
+    return comp, (xm + m*g)
+
+def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, mkeep_opt = None, lamda = None, init_loss = None, lamda2 = None):
 
     y_n = img # current image
 
     g_n = g_2n - torch.mul(torch.div(torch.dot(g_2n, g_1n), torch.dot(g_1n, g_1n)), g_1n)
 
     #y_n_prime = torch.sub(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
-    y_n_prime = torch.add(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
+    if direction == 0:
+        y_n_prime = torch.add(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
+    elif direction == 1:
+        y_n_prime = torch.sub(y_n.flatten(), torch.mul(lamda, g_n)).reshape(1, nc, imsize, imsize)
+
+    # citation
+    ##############################################
+    y_n_prime = torch.clamp(y_n_prime, 0, 1)
+    dim = torch.clamp((y_n_prime-ref), -1, 1)
+    y_n_prime = ref + dim
+    ################################################
+
     # sub or add depends on the maximal or minimal opt goal
     #print('y_n_prime - y_n: ', (y_n_prime - y_n).sum() )
     
     y_n_loss, _ = mkeep(y_n.detach(), ref.detach())
     # mkeep is used to calculate the loss from the holding method
     # loss from two gradient
-    y_n_prime_loss, g_1n_prime = mkeep(y_n_prime.detach(), ref.detach())
-    
+    y_n_prime_loss, _ = mkeep(y_n_prime.detach(), ref.detach())
+
     comp = torch.abs(y_n_prime_loss - y_n_loss)
     first_comp = comp
     #print('comp', comp) # current loss error for the holding method
 
     g_1n_prime_bi = mkeep(y_n_prime.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
-    comp, y_n1 = bisection(mkeep, -1, 0, g_1n_prime_bi, ref, y_n, y_n_prime)
+    #comp, y_n1 = bisection(mkeep, -5, 0, g_1n_prime_bi, ref, y_n, y_n_prime)
+    comp, y_n1, lamda2_prime = prof_wang(mkeep, ref, y_n_prime.detach(), lamda2, g_1n_prime_bi, init_loss)
+    if torch.abs(comp) > 0.01:
+        comp, y_n1 = bisection(mkeep, -5, 0, g_1n_prime_bi, ref, y_n, y_n_prime)
+        #comp, y_n1 = bisection1(mkeep, -0.1, 0.1, g_1n_prime_bi, ref, init_loss, y_n_prime)
+    if torch.abs(comp) > 0.01:
+        print('enter adam')
+        comp, y_n1 = Adam(init_loss.detach(), y_n_prime, ref, mkeep_opt = mkeep_opt)
 
-    # if comp == None:
-    #     y_n1 = y_n_prime
-    #     for i,v in enumerate(vsearch):
-    #         tep_img = y_n1.flatten() + v * g_1n_prime
-    #         tep_img = tep_img.reshape(1, nc, imsize, imsize)
-    #         tep_mkeep_loss, _ = mkeep(tep_img.detach(), ref.detach())
-    #         tep_comp =  torch.abs(tep_mkeep_loss - y_n_loss)
-            
-    #         # if i % 1000 == 0:
-    #         #     print('Current v: ' + str(v) + ', temp_comp: ' + str(tep_comp))
-    #         if tep_comp  < comp:
-    #             # v is correct
-    #             comp = tep_comp
-    #             y_n1 = tep_img
-                
-    #             if tep_comp < 5e-5:
-    #                 print("find one!")
-    #                 break
-    #         # else do not renew yn, just reduce v        
+    #comp, y_n1 = Adam(init_loss.detach(), y_n_prime, ref, mkeep_opt = mkeep_opt)
 
-    #         # For -v:
-    #         tep_img = y_n1.flatten() - v * g_1n_prime
-    #         tep_img = tep_img.reshape(1, nc, imsize, imsize)
-    #         tep_mkeep_loss, _ = mkeep(tep_img.detach(), ref.detach())
-    #         tep_comp =  torch.abs(tep_mkeep_loss - y_n_loss)
-            
-    #         # if i % 1000 == 0:
-    #         #     print('Current v: ' + str(v) + ', temp_comp: ' + str(tep_comp))
-    #         if tep_comp  < comp:
-    #             # v is correct
-    #             comp = tep_comp
-    #             y_n1 = tep_img
-                
-    #             if tep_comp < 5e-5:
-    #                 print("find one!")
-    #                 break
 
-    return y_n1, first_comp
+
+    # gonna add adam to this
+
+    return y_n1, first_comp, lamda2_prime
