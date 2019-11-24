@@ -4,9 +4,9 @@ import torch.nn.functional as F
 import copy
 import pytorch_ssim
 import numpy as numpy
-import cv2
 import kornia
 import os
+import torchvision
 
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -79,7 +79,7 @@ def gaussian_noise(img, k=8):
     imgn = torch.clamp(imgn, 0, 1)
     return imgn
 
-def blur_noise(img, kernal=3, sigma=1.5):
+def blur_noise(img, kernal=3, sigma=6):
     gauss = kornia.filters.GaussianBlur2d( (kernal, kernal), (sigma, sigma) )
     imgn = gauss(img) / 255
     imgn = torch.clamp(imgn, 0, 1)
@@ -93,7 +93,7 @@ def jpeg_noise(img):
     temp = temp.squeeze(0) 
     temp = unloader(temp)
     noise_os = os.path.join('./jpeg_noise.jpeg')
-    temp.save(noise_os, "JPEG", quality=30)
+    temp.save(noise_os, "JPEG", quality=25)
     imgn = image_loader(noise_os)
     # finally give up using buffer ...
     #buffer = BytesIO()
@@ -103,8 +103,16 @@ def jpeg_noise(img):
     # image = loader(image).unsqueeze(0)
     return imgn
 
-def gamma_noise(img):
-    return img
+def gamma_noise(img, gamma=2):
+    img /= 255
+    img = torch.clamp(img, 0, 1)
+    temp = img.cpu().clone() 
+    temp = temp.squeeze(0) 
+    temp = unloader(temp)
+    image = torchvision.transforms.functional.adjust_gamma(temp, gamma, gain=1)
+    image = loader(image).unsqueeze(0)
+    image = torch.clamp(image, 0, 1)
+    return image.to(device, torch.float)
 
 # mad search
 

@@ -101,7 +101,7 @@ def mad_test(imgn, ref_img, hold, direction):
         else:
             pass
         lamuda = c / (torch.norm(g2) ) + 0.02
-        #print('iter: ' , i, 'lamuda: ', lamuda, 'c: ', c, 'norm: ', torch.norm(g2))
+        #print('iter: ' , i, 'lamuda: ', lamuda, 'c: ', c, 'norm: ', torch.norm(g2), 'loss1: ', loss1, 'loss2: ', loss2)
         
         y, comp, lamda2 = search_grad(ref.detach(), g_2n = g2, g_1n = g1, direction = direction, 
                         img = input_img.detach(), mkeep = mkeep, mkeep_opt = mkeep_opt, 
@@ -150,7 +150,7 @@ if __name__ == "__main__":
         ref = ref_img * 255
 
         # for every kind of noise
-        for noise_tag in range(2, 3):
+        for noise_tag in range(3, 4):
             noise_use, noise_name = img_const(image_tag, noise_tag)
 
             imgn = noise_use(ref)
