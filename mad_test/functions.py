@@ -6,6 +6,7 @@ import pytorch_ssim
 import numpy as numpy
 import cv2
 import kornia
+import os
 
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -13,6 +14,8 @@ import torchvision.transforms as transforms
 import torchvision.models as models
 
 from models import *
+from io import StringIO
+from io import BytesIO
 
 # functions
 
@@ -84,7 +87,21 @@ def blur_noise(img, kernal=3, sigma=1.5):
     return imgn
 
 def jpeg_noise(img):
-    return img
+    img /= 255
+    img = torch.clamp(img, 0, 1)
+    temp = img.cpu().clone() 
+    temp = temp.squeeze(0) 
+    temp = unloader(temp)
+    noise_os = os.path.join('./jpeg_noise.jpeg')
+    temp.save(noise_os, "JPEG", quality=30)
+    imgn = image_loader(noise_os)
+    # finally give up using buffer ...
+    #buffer = BytesIO()
+    # buffer.seek(0)
+    # contents = buffer.getvalue()
+    # image = Image.frombuffer("L", (imsize, imsize), contents, 'raw', "L", 0, 1)
+    # image = loader(image).unsqueeze(0)
+    return imgn
 
 def gamma_noise(img):
     return img

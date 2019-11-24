@@ -112,7 +112,7 @@ def mad_test(imgn, ref_img, hold, direction):
         # xx.append(i)
         # yy.append(float(loss_change))
         #print('iter: ', i, 'change: ', loss_change, 'keep', loss_keep, 'comp: ', comp, 'lamda2: ', lamda2)
-        if i % 10 == 0:
+        if i % 50 == 0:
             print('iteration  : ' + str(i))
             print('keep       : ' + str(loss_keep))
             print('change     : ' + str(float(loss_change)))
@@ -123,7 +123,7 @@ def mad_test(imgn, ref_img, hold, direction):
         input_img = y
         
         #early stop
-        if loss_change < 1e-4:
+        if (abs(loss_change) - loss2) / loss2 < 5e-5 and i > 500:
             print('early stop !!!')
             print('iteration  : ' + str(i))
             print('keep       : ' + str(loss_keep))
@@ -142,7 +142,7 @@ if __name__ == "__main__":
     starttime = datetime.datetime.now()
 
     #for every imgs
-    for imgs in range(2, 3):
+    for imgs in range(1, 2):
         image_tag = imgs
 
         # load images and add noise
@@ -150,13 +150,13 @@ if __name__ == "__main__":
         ref = ref_img * 255
 
         # for every kind of noise
-        for noise_tag in range(1, 2):
+        for noise_tag in range(2, 3):
             noise_use, noise_name = img_const(image_tag, noise_tag)
 
             imgn = noise_use(ref)
 
-            # imgshow = imgn
-            # imshow1(imgshow, title='distorted image')
+            imgshow = imgn
+            imshow1(imgshow, title='distorted image')
 
             # for every hold and direction
             for h in range(0, 2):
