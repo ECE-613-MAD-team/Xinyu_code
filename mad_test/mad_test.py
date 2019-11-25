@@ -131,7 +131,10 @@ def mad_test(imgn, ref_img, hold, direction):
         #loss2, g2 = mse(input_img.detach(), ref.detach())
         #loss2, g2 = model_gram(model_style, input_img.detach(), style_losses)
         loss2, g2 = mchange(input_img.detach(), ref.detach(), model_style=model_style, style_losses=style_losses)
-        lamuda = 0.1
+        if h == 0:
+            lamuda = 0.0001
+        else:
+            lamuda = 0.001
 
         if i == 0:
             c = lamuda*torch.norm(g2)
@@ -139,7 +142,7 @@ def mad_test(imgn, ref_img, hold, direction):
         else:
             pass
         lamuda = c / (torch.norm(g2) ) + 0.02
-        #print('iter: ' , i, 'lamuda: ', lamuda, 'c: ', c, 'norm: ', torch.norm(g2), 'loss1: ', loss1, 'loss2: ', loss2)
+        print('iter:' , i, 'lamuda:', lamuda, 'c:', c, 'norm:', torch.norm(g2), 'loss1:', float(loss1), 'loss2:', float(loss2))
         
         y, comp, lamda2 = search_grad(ref.detach(), g_2n = g2, g_1n = g1, direction = direction, 
                         img = input_img.detach(), mkeep = mkeep, mkeep_opt = mkeep_opt, 
@@ -150,7 +153,10 @@ def mad_test(imgn, ref_img, hold, direction):
         loss_change, _ = mchange(y.detach(), ref.detach(), model_style=model_style, style_losses=style_losses)
         # xx.append(i)
         # yy.append(float(loss_change))
-        #print('iter: ', i, 'change: ', loss_change, 'keep', loss_keep, 'comp: ', comp, 'lamda2: ', lamda2)
+        print('g1:', g1, 'g2:', g2)
+        print('change:', float(loss_change), 'keep:', float(loss_keep), 'comp:', float(comp), 'lamda2:', float(lamda2))
+        print('change step:', float(loss_change - loss2), 'keep step:', float(loss_keep - init_loss))
+        print('* * * * *')
         if i % 50 == 0:
             print('iteration  : ' + str(i))
             print('keep       : ' + str(loss_keep))
@@ -162,7 +168,10 @@ def mad_test(imgn, ref_img, hold, direction):
         input_img = y
         
         #early stop
-        if (abs(loss_change - loss2)) / loss_change < 1e-4:
+        # loss change to little OR keep change too much
+        change_num = torch.abs(loss_change - loss2).data
+        keep_num = torch.abs(loss_keep - init_loss).data
+        if change_num / loss_change.data < 1e-5 or keep_num / init_loss.data > 1e-3:
             print('early stop !!!')
             print('iteration  : ' + str(i))
             print('keep       : ' + str(loss_keep))

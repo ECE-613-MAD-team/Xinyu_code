@@ -300,16 +300,16 @@ def search_grad(ref, g_1n, g_2n, direction, img=None, mkeep=None, mkeep_opt=None
     #print('comp', comp) # current loss error for the holding method
 
     g_1n_prime_bi = mkeep(y_n_prime.detach(), ref.detach(), model_style, style_losses)[1].reshape(1, nc, imsize, imsize)
-
-    comp, y_n1, lamda2_prime = prof_wang(mkeep, ref, y_n_prime.detach(), lamda2, g_1n_prime_bi, 
-                                    init_loss, model_style, style_losses)
-    if torch.abs(comp) > 0.01:
-        comp, y_n1 = bisection(mkeep, -5, 0, g_1n_prime_bi, ref, y_n, y_n_prime, 
-                            model_style, style_losses)
+    lamda2_prime = 0
+    # comp, y_n1, lamda2_prime = prof_wang(mkeep, ref, y_n_prime.detach(), lamda2, g_1n_prime_bi, 
+    #                                 init_loss, model_style, style_losses)
+    # if torch.abs(comp) > 0.01:
+    # comp, y_n1 = bisection(mkeep, -5, 0, g_1n_prime_bi, ref, y_n, y_n_prime, 
+    #                         model_style, style_losses)
         #comp, y_n1 = bisection1(mkeep, -0.1, 0.1, g_1n_prime_bi, ref, init_loss, y_n_prime)
-    if torch.abs(comp) > 0.01:
-        print('enter adam')
-        comp, y_n1 = Adam(init_loss.detach(), y_n_prime, ref, mkeep_opt=mkeep_opt, 
+    # if torch.abs(comp) > 0.01:
+    #     print('enter adam')
+    comp, y_n1 = Adam(init_loss.detach(), y_n_prime, ref, mkeep_opt=mkeep_opt, 
                         model_style=model_style, style_losses=style_losses)
 
     #comp, y_n1 = Adam(init_loss.detach(), y_n_prime, ref, mkeep_opt = mkeep_opt)

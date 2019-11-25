@@ -18,11 +18,18 @@ cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
 cnn = models.vgg19(pretrained=True).features.to(device).eval()
 
 #constants
-weight_mse = 2e4
-weight_gram = 5e4
-weight_ssim = 2e3
 imsize = 256
 nc = 3
+
+# weight for mse vs ssim
+# weight_mse = 2e4
+# weight_gram = 5e4
+# weight_ssim = 2e3
+
+# weight for ssim vs gram
+weight_mse = 2e4
+weight_gram = 2e5
+weight_ssim = 2e4
 
 class StyleLoss(nn.Module):
 
