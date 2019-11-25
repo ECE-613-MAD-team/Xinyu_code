@@ -24,10 +24,6 @@ loader = transforms.Compose([
     transforms.ToTensor()])  # transform it into a torch tensor
 unloader = transforms.ToPILImage()  # reconvert into PIL image
 
-cnn_normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
-cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
-cnn = models.vgg19(pretrained=True).features.to(device).eval()
-
 def cv_converter(img):
     image = Image.fromarray(img[...,::-1])
     image = loader(image).unsqueeze(0)
@@ -271,8 +267,9 @@ def bisection1(f, lower, upper, g, ref, init_loss, xm):
        
     return comp, (xm + m*g)
 
-def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, mkeep_opt = None, lamda = None, init_loss = None, lamda2 = None):
-
+def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, mkeep_opt = None, 
+        lamda = None, init_loss = None, lamda2 = None):
+    # TODO: add model and losses into mkeep and mkeep_opt
     y_n = img # current image
 
     g_n = g_2n - torch.mul(torch.div(torch.dot(g_2n, g_1n), torch.dot(g_1n, g_1n)), g_1n)

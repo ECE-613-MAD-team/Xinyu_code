@@ -27,6 +27,7 @@ load_path = '/home/j263zhou/Desktop/learning/2019_3_Fall/1_image_processing/rese
 #direction = 0 # 0: add, 1: sub
 epi = 1e-6
 
+# constants for noise type
 def img_const(image_tag, noise_tag):
 
     noise_use = gaussian_noise
@@ -41,25 +42,47 @@ def img_const(image_tag, noise_tag):
         
     noise_name = ['gaussian', 'blur', 'jpeg', 'gamma']
 
-
     return noise_use, noise_name[noise_tag]
 
+# constants for models used
 def model_const(hold):
 
     mkeep = mse
     mkeep_opt = ssim_opt
     mchange = ssim
+    hold_name = ''
 
+    # for MSE vs SSIM
+    # if hold == 0:
+    #     mkeep = mse
+    #     mkeep_opt = mse_opt
+    #     mchange = ssim
+    # elif hold == 1:
+    #     mkeep = ssim
+    #     mkeep_opt = ssim_opt
+    #     mchange = mse
+
+    # if h == 0:
+    #     hold_name = 'mse'
+    # elif h == 1:
+    #     hold_name = 'ssim'
+
+    # for MSE vs VGGGRAM
     if hold == 0:
         mkeep = mse
         mkeep_opt = mse_opt
-        mchange = ssim
+        mchange = model_gram
     elif hold == 1:
-        mkeep = ssim
-        mkeep_opt = ssim_opt
+        mkeep = model_gram
+        mkeep_opt = model_gram_opt
         mchange = mse
 
-    return mkeep, mkeep_opt, mchange
+    if h == 0:
+        hold_name = 'mse'
+    elif h == 1:
+        hold_name = 'vgggram'
+
+    return mkeep, mkeep_opt, mchange, hold_name
 
 
 def mad_test(imgn, ref_img, hold, direction):
@@ -69,7 +92,7 @@ def mad_test(imgn, ref_img, hold, direction):
     # yy = []
 
     # load the model
-    # model_style, style_losses = get_style_model_and_losses(cnn, cnn_normalization_mean, cnn_normalization_std, ref_img)
+    model_style, style_losses = get_style_model_and_losses(cnn, cnn_normalization_mean, cnn_normalization_std, ref_img)
     # print('model load success!')
     # print(model_style)
 
@@ -84,7 +107,7 @@ def mad_test(imgn, ref_img, hold, direction):
     for i in range(iterations):
         #lamuda = 0.1 - i * 0.00015
         
-        mkeep, mkeep_opt, mchange = model_const(hold)
+        mkeep, mkeep_opt, mchange, _ = model_const(hold)
         # ref = ref.to(device)
         # input_img = input_img.to(device)
         #loss1, g1 = model_gram(model_style, input_img.detach(), style_losses)
@@ -123,7 +146,7 @@ def mad_test(imgn, ref_img, hold, direction):
         input_img = y
         
         #early stop
-        if (abs(loss_change) - loss2) / loss2 < 5e-5 and i > 500:
+        if (abs(loss_change) - loss2) / loss2 < 1e-4:
             print('early stop !!!')
             print('iteration  : ' + str(i))
             print('keep       : ' + str(loss_keep))
@@ -142,7 +165,7 @@ if __name__ == "__main__":
     starttime = datetime.datetime.now()
 
     #for every imgs
-    for imgs in range(1, 35):
+    for imgs in range(1, 2):
         image_tag = imgs
 
         # load images and add noise
@@ -150,7 +173,7 @@ if __name__ == "__main__":
         ref = ref_img * 255
 
         # for every kind of noise
-        for noise_tag in range(3, 4):
+        for noise_tag in range(0, 1):
             noise_use, noise_name = img_const(image_tag, noise_tag)
 
             imgn = noise_use(ref)
@@ -169,13 +192,9 @@ if __name__ == "__main__":
                     image = image.squeeze(0)      # remove the fake batch dimension
                     image = unloader(image)
 
-                    hold_name = ''
-                    if h == 0:
-                        hold_name = 'mse'
-                    elif h == 1:
-                        hold_name = 'ssim'
+                    _, _, _, hold_name = model_const(h)
 
-                    save_dir = './test_result/MSE_vs_SSIM/' + hold_name + '/' 
+                    save_dir = './test_result/MSE_vs_VGGGRAM/' + hold_name + '/' 
                     save_file = save_dir + noise_name + '_' + str(image_tag) + '_' + str(d) + '.jpg'
                     if not os.path.exists(save_dir):
                         os.makedirs(save_dir)
