@@ -119,11 +119,11 @@ def gram_matrix(input):
     # by dividing by the number of element in each feature maps.
     return G.div(a * b * c * d)
 
-def model_gram(img, ref=None, model_style, style_losses):
+def model_gram(img, ref=None, model_style=None, style_losses=None):
     
     img = img.reshape(1, nc, imsize, imsize)
     
-    # img.requires_grad_()
+    img.requires_grad_()
     # model_style, style_losses = get_style_model_and_losses(cnn,
     #                             cnn_normalization_mean, cnn_normalization_std, ref)
     
@@ -136,7 +136,7 @@ def model_gram(img, ref=None, model_style, style_losses):
     
     return style_score, grad.flatten()
 
-def model_gram_opt(m0, img, ref=None, model_style, style_losses):
+def model_gram_opt(m0, img, ref=None, model_style=None, style_losses=None):
 
     img = img.reshape(1, nc, imsize, imsize)
     

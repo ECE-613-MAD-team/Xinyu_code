@@ -68,17 +68,32 @@ def model_const(hold):
     #     hold_name = 'ssim'
 
     # for MSE vs VGGGRAM
+    # if hold == 0:
+    #     mkeep = mse
+    #     mkeep_opt = mse_opt
+    #     mchange = model_gram
+    # elif hold == 1:
+    #     mkeep = model_gram
+    #     mkeep_opt = model_gram_opt
+    #     mchange = mse
+
+    # if h == 0:
+    #     hold_name = 'mse'
+    # elif h == 1:
+    #     hold_name = 'vgggram'
+
+    # for SSIM vs VGGGRAM
     if hold == 0:
-        mkeep = mse
-        mkeep_opt = mse_opt
+        mkeep = ssim
+        mkeep_opt = ssim_opt
         mchange = model_gram
     elif hold == 1:
         mkeep = model_gram
         mkeep_opt = model_gram_opt
-        mchange = mse
+        mchange = ssim
 
     if h == 0:
-        hold_name = 'mse'
+        hold_name = 'ssim'
     elif h == 1:
         hold_name = 'vgggram'
 
@@ -103,7 +118,7 @@ def mad_test(imgn, ref_img, hold, direction):
     lamda2 = -1
 
     # mad search find the maximal / minimal
-    iterations = 1000
+    iterations = 800
     for i in range(iterations):
         #lamuda = 0.1 - i * 0.00015
         
@@ -111,11 +126,11 @@ def mad_test(imgn, ref_img, hold, direction):
         # ref = ref.to(device)
         # input_img = input_img.to(device)
         #loss1, g1 = model_gram(model_style, input_img.detach(), style_losses)
-        loss1, g1 = mkeep(input_img.detach(), ref.detach())
+        loss1, g1 = mkeep(input_img.detach(), ref.detach(), model_style=model_style, style_losses=style_losses)
         
         #loss2, g2 = mse(input_img.detach(), ref.detach())
         #loss2, g2 = model_gram(model_style, input_img.detach(), style_losses)
-        loss2, g2 = mchange(input_img.detach(), ref.detach())
+        loss2, g2 = mchange(input_img.detach(), ref.detach(), model_style=model_style, style_losses=style_losses)
         lamuda = 0.1
 
         if i == 0:
@@ -128,10 +143,11 @@ def mad_test(imgn, ref_img, hold, direction):
         
         y, comp, lamda2 = search_grad(ref.detach(), g_2n = g2, g_1n = g1, direction = direction, 
                         img = input_img.detach(), mkeep = mkeep, mkeep_opt = mkeep_opt, 
-                        lamda = lamuda, init_loss = init_loss, lamda2 = lamda2)
+                        lamda = lamuda, init_loss = init_loss, lamda2 = lamda2, 
+                        model_style=model_style, style_losses=style_losses)
         
-        loss_keep, _ = mkeep(y.detach(), ref.detach())
-        loss_change, _ = mchange(y.detach(), ref.detach())
+        loss_keep, _ = mkeep(y.detach(), ref.detach(), model_style=model_style, style_losses=style_losses)
+        loss_change, _ = mchange(y.detach(), ref.detach(), model_style=model_style, style_losses=style_losses)
         # xx.append(i)
         # yy.append(float(loss_change))
         #print('iter: ', i, 'change: ', loss_change, 'keep', loss_keep, 'comp: ', comp, 'lamda2: ', lamda2)
@@ -146,7 +162,7 @@ def mad_test(imgn, ref_img, hold, direction):
         input_img = y
         
         #early stop
-        if (abs(loss_change) - loss2) / loss2 < 1e-4:
+        if (abs(loss_change - loss2)) / loss_change < 1e-4:
             print('early stop !!!')
             print('iteration  : ' + str(i))
             print('keep       : ' + str(loss_keep))
@@ -194,7 +210,7 @@ if __name__ == "__main__":
 
                     _, _, _, hold_name = model_const(h)
 
-                    save_dir = './test_result/MSE_vs_VGGGRAM/' + hold_name + '/' 
+                    save_dir = './test_result/SSIM_vs_VGGGRAM/' + hold_name + '/' 
                     save_file = save_dir + noise_name + '_' + str(image_tag) + '_' + str(d) + '.jpg'
                     if not os.path.exists(save_dir):
                         os.makedirs(save_dir)

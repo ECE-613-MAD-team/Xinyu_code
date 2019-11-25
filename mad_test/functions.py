@@ -112,20 +112,20 @@ def gamma_noise(img, gamma=2):
 
 # mad search
 
-def prof_wang(mkeep, ref, xm, lamda2, gkeep, init_loss):
+def prof_wang(mkeep, ref, xm, lamda2, gkeep, init_loss, model_style=None, style_losses=None):
     # citation:
-    mb, _ = mkeep(xm ,ref)
+    mb, _ = mkeep(xm ,ref, model_style=model_style, style_losses=style_losses)
     
     temp_im = xm + lamda2*gkeep
-    mt, _ = mkeep(temp_im.detach() ,ref)
+    mt, _ = mkeep(temp_im.detach() ,ref, model_style=model_style, style_losses=style_losses)
     lamda2 = (lamda2*(init_loss - mb)/(mt - mb + 1e-6)).detach()
     xk = xm + lamda2*gkeep
-    mk, _ = mkeep(xk.detach() ,ref)
+    mk, _ = mkeep(xk.detach() ,ref, model_style=model_style, style_losses=style_losses)
     comp = mk-init_loss
     y = xk.reshape(1,nc,imsize,imsize)
     return comp, y, lamda2
 
-def Adam(m0, xm, ref, mkeep_opt):    
+def Adam(m0, xm, ref, mkeep_opt, model_style=None, style_losses=None):    
     xm = xm.reshape(1,nc,imsize,imsize)
     lr = 2e-5  # vgg+gram 2e-5
     beta_1 = 0.9
@@ -144,7 +144,7 @@ def Adam(m0, xm, ref, mkeep_opt):
         #print('t',t)
         #if t > 10: 
         #    lr = lr*0.9
-        comp, g_t = mkeep_opt(m0,xm,ref)
+        comp, g_t = mkeep_opt(m0, xm, ref, model_style=model_style, style_losses=style_losses)
         m_t = beta_1*m_t + (1-beta_1)*g_t     # consider 90% of previous, and 10% of current
         v_t = beta_2*v_t + (1-beta_2)*(g_t*g_t) # 99.9% of previous (square grad), and 1% of current
         m_cap = m_t/(1-(beta_1**t))      #calculates the bias-corrected estimates
@@ -155,8 +155,8 @@ def Adam(m0, xm, ref, mkeep_opt):
 
     return comp, xm
 
-def bisection(mkeep, lower, upper, g, ref, y_n, xm):
-    y_n_loss, _ = mkeep(y_n, ref)
+def bisection(mkeep, lower, upper, g, ref, y_n, xm, model_style=None, style_losses=None):
+    y_n_loss, _ = mkeep(y_n, ref, model_style=model_style, style_losses=style_losses)
     a = lower
     b = upper
     m = (a+b)/2
@@ -165,9 +165,9 @@ def bisection(mkeep, lower, upper, g, ref, y_n, xm):
         t += 1
         if t > 1e2:
             break
-        loss_a = mkeep(xm+a*g, ref)[0] - y_n_loss
-        loss_m = mkeep(xm+m*g, ref)[0] - y_n_loss
-        loss_b = mkeep(xm+b*g, ref)[0] - y_n_loss
+        loss_a = mkeep(xm+a*g, ref, model_style=model_style, style_losses=style_losses)[0] - y_n_loss
+        loss_m = mkeep(xm+m*g, ref, model_style=model_style, style_losses=style_losses)[0] - y_n_loss
+        loss_b = mkeep(xm+b*g, ref, model_style=model_style, style_losses=style_losses)[0] - y_n_loss
         if loss_a * loss_b > 0 and abs(loss_b) - abs(loss_a) > 0:
             b = -b
             m = (a+b)/2
@@ -184,10 +184,10 @@ def bisection(mkeep, lower, upper, g, ref, y_n, xm):
             print('a wider bound!')
             return None, None
     m = (a+b)/2
-    comp = mkeep(xm+m*g, ref)[0] - y_n_loss
+    comp = mkeep(xm+m*g, ref, model_style=model_style, style_losses=style_losses)[0] - y_n_loss
     return comp, (xm + m*g)
 
-def bisection1(f, lower, upper, g, ref, init_loss, xm):
+def bisection1(f, lower, upper, g, ref, init_loss, xm, model_style=None, style_losses=None):
     xm = xm.reshape(1,nc,imsize,imsize)
     obj = init_loss
     var = 1
@@ -195,18 +195,18 @@ def bisection1(f, lower, upper, g, ref, init_loss, xm):
     b = upper
     m = (a+b)/2
     flag = 0
-    m1, _ = f((xm+a*g),ref)
-    m2, _ = f((xm+m*g),ref)
-    m3, _ = f((xm+b*g),ref)
+    m1, _ = f( (xm+a*g), ref, model_style=model_style, style_losses=style_losses )
+    m2, _ = f( (xm+m*g), ref, model_style=model_style, style_losses=style_losses )
+    m3, _ = f( (xm+b*g), ref, model_style=model_style, style_losses=style_losses )
     tol = 30
     x = 0.01
     
     while var == 1:            
-        if (m3-m2) <= 0  or (m2-m1) <= 0:
+        if (m3-m2) <= 0 or (m2-m1) <= 0:
             a = m
             m = (a+b)/2
-            m1, _ = f((xm+a*g),ref)
-            m2, _ = f((xm+m*g),ref)
+            m1, _ = f( (xm+a*g), ref, model_style=model_style, style_losses=style_losses )
+            m2, _ = f( (xm+m*g), ref, model_style=model_style, style_losses=style_losses )
             #m3, _ = f(xm+b*g,ref)
             if flag > tol :
                 #print('!!!!!!!!!!!')
@@ -218,8 +218,8 @@ def bisection1(f, lower, upper, g, ref, init_loss, xm):
         if (m1-obj) > 0 and (m3-obj) > 0: 
             a = a-x
             m = (a+b)/2
-            m1, _ = f((xm+a*g),ref)
-            m2, _ = f((xm+m*g),ref)
+            m1, _ = f( (xm+a*g), ref, model_style=model_style, style_losses=style_losses )
+            m2, _ = f( (xm+m*g), ref, model_style=model_style, style_losses=style_losses )
             #m3, _ = f(xm+b*g,ref)
             if flag > tol :
                 #print('!!!!!!!!!!!')
@@ -231,8 +231,8 @@ def bisection1(f, lower, upper, g, ref, init_loss, xm):
             b = b+x
             m = (a+b)/2
             #m1, _ = f(xm+a*g,ref)
-            m2, _ = f((xm+m*g),ref)
-            m3, _ = f((xm+b*g),ref)
+            m2, _ = f( (xm+m*g), ref, model_style=model_style, style_losses=style_losses )
+            m3, _ = f( (xm+b*g), ref, model_style=model_style, style_losses=style_losses )
             if flag > tol :
                # print('!!!!!!!!!!!')
                 break
@@ -248,27 +248,27 @@ def bisection1(f, lower, upper, g, ref, init_loss, xm):
         if (m1-obj)*(m2-obj) <= 0:
             b = m
             m = (a+b)/2
-            m2, _ = f((xm+m*g),ref)
-            m3, _ = f((xm+b*g),ref)
+            m2, _ = f( (xm+m*g), ref, model_style=model_style, style_losses=style_losses )
+            m3, _ = f( (xm+b*g), ref, model_style=model_style, style_losses=style_losses )
         elif (m2-obj)*(m3-obj) <= 0:
             a = m
             m = (a+b)/2
-            m1, _ = f((xm+a*g),ref)
-            m2, _ = f((xm+m*g),ref)
+            m1, _ = f( (xm+a*g), ref, model_style=model_style, style_losses=style_losses )
+            m2, _ = f( (xm+m*g), ref, model_style=model_style, style_losses=style_losses )
         elif flag > tol :
             break
         else:
             pass
          
         if b-a < 1e-6:
-             break
+            break
         
     comp = m2-obj
        
     return comp, (xm + m*g)
 
-def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, mkeep_opt = None, 
-        lamda = None, init_loss = None, lamda2 = None):
+def search_grad(ref, g_1n, g_2n, direction, img=None, mkeep=None, mkeep_opt=None, lamda=None, 
+            init_loss=None, lamda2=None, model_style=None, style_losses=None):
     # TODO: add model and losses into mkeep and mkeep_opt
     y_n = img # current image
 
@@ -290,24 +290,27 @@ def search_grad(ref, g_1n, g_2n, direction, img = None, mkeep = None, mkeep_opt 
     # sub or add depends on the maximal or minimal opt goal
     #print('y_n_prime - y_n: ', (y_n_prime - y_n).sum() )
     
-    y_n_loss, _ = mkeep(y_n.detach(), ref.detach())
+    y_n_loss, _ = mkeep(y_n.detach(), ref.detach(), model_style, style_losses)
     # mkeep is used to calculate the loss from the holding method
     # loss from two gradient
-    y_n_prime_loss, _ = mkeep(y_n_prime.detach(), ref.detach())
+    y_n_prime_loss, _ = mkeep(y_n_prime.detach(), ref.detach(), model_style, style_losses)
 
     comp = torch.abs(y_n_prime_loss - y_n_loss)
     first_comp = comp
     #print('comp', comp) # current loss error for the holding method
 
-    g_1n_prime_bi = mkeep(y_n_prime.detach(), ref.detach())[1].reshape(1,nc,imsize,imsize)
-    #comp, y_n1 = bisection(mkeep, -5, 0, g_1n_prime_bi, ref, y_n, y_n_prime)
-    comp, y_n1, lamda2_prime = prof_wang(mkeep, ref, y_n_prime.detach(), lamda2, g_1n_prime_bi, init_loss)
+    g_1n_prime_bi = mkeep(y_n_prime.detach(), ref.detach(), model_style, style_losses)[1].reshape(1, nc, imsize, imsize)
+
+    comp, y_n1, lamda2_prime = prof_wang(mkeep, ref, y_n_prime.detach(), lamda2, g_1n_prime_bi, 
+                                    init_loss, model_style, style_losses)
     if torch.abs(comp) > 0.01:
-        comp, y_n1 = bisection(mkeep, -5, 0, g_1n_prime_bi, ref, y_n, y_n_prime)
+        comp, y_n1 = bisection(mkeep, -5, 0, g_1n_prime_bi, ref, y_n, y_n_prime, 
+                            model_style, style_losses)
         #comp, y_n1 = bisection1(mkeep, -0.1, 0.1, g_1n_prime_bi, ref, init_loss, y_n_prime)
     if torch.abs(comp) > 0.01:
         print('enter adam')
-        comp, y_n1 = Adam(init_loss.detach(), y_n_prime, ref, mkeep_opt = mkeep_opt)
+        comp, y_n1 = Adam(init_loss.detach(), y_n_prime, ref, mkeep_opt=mkeep_opt, 
+                        model_style=model_style, style_losses=style_losses)
 
     #comp, y_n1 = Adam(init_loss.detach(), y_n_prime, ref, mkeep_opt = mkeep_opt)
 
