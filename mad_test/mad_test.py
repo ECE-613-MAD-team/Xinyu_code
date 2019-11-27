@@ -190,7 +190,7 @@ if __name__ == "__main__":
     starttime = datetime.datetime.now()
 
     #for every imgs
-    for imgs in range(1, 2):
+    for imgs in range(1, 35):
         image_tag = imgs
 
         # load images and add noise
@@ -198,7 +198,7 @@ if __name__ == "__main__":
         ref = ref_img * 255
 
         # for every kind of noise
-        for noise_tag in range(0, 1):
+        for noise_tag in range(0, 4):
             noise_use, noise_name = img_const(image_tag, noise_tag)
 
             imgn = noise_use(ref)

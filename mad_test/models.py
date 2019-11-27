@@ -28,7 +28,7 @@ nc = 3
 
 # weight for ssim vs gram
 weight_mse = 2e4
-weight_gram = 2e5
+weight_gram = 1e5
 weight_ssim = 2e4
 
 class StyleLoss(nn.Module):
