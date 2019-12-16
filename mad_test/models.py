@@ -4,17 +4,32 @@ import torch.nn.functional as F
 import copy
 import pytorch_ssim
 import time
+
+import torchvision.models as models
+
 #content_layers_default = ['conv_4']
 #style_layers_default = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
 style_layers_default = ['conv_1','pool_2', 'pool_4', 'pool_8', 'pool_12']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# VGG19 model
+cnn_normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
+cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
+cnn = models.vgg19(pretrained=True).features.to(device).eval()
+
 #constants
-weight_mse = 2e4
-weight_gram = 1e5
-weight_ssim = 2e3
 imsize = 256
 nc = 3
+
+# weight for mse vs ssim
+# weight_mse = 2e4
+# weight_gram = 5e4
+# weight_ssim = 2e3
+
+# weight for ssim vs gram
+weight_mse = 2e4
+weight_gram = 1e5
+weight_ssim = 2e4
 
 class StyleLoss(nn.Module):
 
@@ -26,20 +41,6 @@ class StyleLoss(nn.Module):
         G = gram_matrix(input)
         self.loss = F.mse_loss(G, self.target)
         return input
-
-# class ContentLoss(nn.Module):
-
-#     def __init__(self, target,):
-#         super(ContentLoss, self).__init__()
-#         # we 'detach' the target content from the tree used
-#         # to dynamically compute the gradient: this is a stated value,
-#         # not a variable. Otherwise the forward method of the criterion
-#         # will throw an error.
-#         self.target = target.detach()
-
-#     def forward(self, input):
-#         self.loss = F.mse_loss(input, self.target)
-#         return input
 
 class Normalization(nn.Module):
     def __init__(self, mean, std):
@@ -93,13 +94,6 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
 
         model.add_module(name, layer)
 
-#         if name in content_layers:
-#             # add content loss:
-#             target = model(content_img).detach()
-#             content_loss = ContentLoss(target)
-#             model.add_module("content_loss_{}".format(i), content_loss)
-#             content_losses.append(content_loss)
-
         if name in style_layers:
             # add style loss:
             target_feature = model(style_img).detach()
@@ -119,11 +113,6 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
 
     return model, style_losses     #, content_losses
 
-# def get_input_optimizer(input_img):
-#     # this line to show that input is a parameter that requires a gradient
-#     optimizer = optim.LBFGS([input_img.requires_grad_()])
-#     return optimizer
-
 def gram_matrix(input):
     a, b, c, d = input.size()  # a=batch size(=1)
     # b=number of feature maps
@@ -137,18 +126,44 @@ def gram_matrix(input):
     # by dividing by the number of element in each feature maps.
     return G.div(a * b * c * d)
 
-def model_gram(model, img, losses):
+def model_gram(img, ref=None, model_style=None, style_losses=None):
+    
+    img = img.reshape(1, nc, imsize, imsize)
+    
     img.requires_grad_()
+    # model_style, style_losses = get_style_model_and_losses(cnn,
+    #                             cnn_normalization_mean, cnn_normalization_std, ref)
     
-    model(img)
+    model_style(img)
     style_score = 0
-    for sl in losses:
-        style_score += weight_gram*sl.loss
+    for sl in style_losses:
+        style_score += weight_gram * sl.loss
     style_score.backward()
+    grad = img.grad
     
-    return style_score, img.grad.flatten()
+    return style_score, grad.flatten()
 
-def mse(img,ref):
+def model_gram_opt(m0, img, ref=None, model_style=None, style_losses=None):
+
+    img = img.reshape(1, nc, imsize, imsize)
+    
+    img.requires_grad_()
+    # model_style, style_losses = get_style_model_and_losses(cnn,
+    #                             cnn_normalization_mean, cnn_normalization_std, ref)
+    
+    model_style(img)
+    style_score = 0
+    for sl in style_losses:
+        style_score += weight_gram * sl.loss
+    comp = (m0-style_score)**2
+    
+    comp.backward()
+    
+    grad = img.grad
+    
+    return comp, grad
+
+def mse(img, ref, model_style=None, style_losses=None):
     _, nc, imsize, imsize = img.shape
     img.requires_grad_()
     
@@ -158,7 +173,7 @@ def mse(img,ref):
 
     return loss, img.grad.flatten()
 
-def mse_opt(m0, temp, ref):
+def mse_opt(m0, temp, ref, model_style=None, style_losses=None):
     temp = temp.reshape(1, nc, imsize, imsize)
     temp.requires_grad_()
 
@@ -169,7 +184,7 @@ def mse_opt(m0, temp, ref):
 
     return comp, temp.grad
 
-def ssim(img, ref):
+def ssim(img, ref, model_style=None, style_losses=None):
 
     img.requires_grad_()
     ssim_loss = pytorch_ssim.SSIM(window_size=11)
@@ -180,7 +195,7 @@ def ssim(img, ref):
 
     return ssim_value, grad_return
 
-def ssim_opt(m0, temp, ref):
+def ssim_opt(m0, temp, ref, model_style=None, style_losses=None):
     temp = temp.reshape(1, nc, imsize, imsize)
 
     # _, nc, imsize, imsize = temp.shape
