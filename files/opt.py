@@ -7,7 +7,6 @@ from utils import *
 from mse import *
 from ssim import *
 from one_layer import *
-from T_CNN import *
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 nc = 3
@@ -273,8 +272,8 @@ def search_grad(ref, g, gkeep, img = None, mkeep = None, weight = None ,init_los
     """
     if int(gd) == 1 or int(gd) == 2:
         opt = ssim_opt
-    else:     
-        opt = model_tcnn_opt
+    else:
+        opt = model_gram_opt
     if torch.abs(comp) > 0.01:
         comp, y = Adam(init_loss.detach(),xm,ref,opt,weight)
     

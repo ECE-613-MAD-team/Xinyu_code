@@ -7,7 +7,7 @@ from utils import *
 from mse import *
 from ssim import *
 from one_layer import *
-from T_CNN import *
+
 import time
 import warnings
 warnings.filterwarnings("ignore")
@@ -37,8 +37,8 @@ name param: full_name (method name,gd,suffix)(str)
 
 """
 method = 'Gram-ssim'
-#distortions = {'noise':'8','blur':'6','jpeg':'25','gamma':'2'}
-distortions = {'noise':'8','blur':'1.5'}
+distortions = {'noise':'8','blur':'6','jpeg':'25','gamma':'2'}
+#distortions = {'blur':'1.5'}
 #loss = []
 def MAD(model_defence, model_attack, weight_attack, weight_defence,ref = None, input_img = None, full_name = None, gd = None,iterations = None):
 
@@ -48,7 +48,7 @@ def MAD(model_defence, model_attack, weight_attack, weight_defence,ref = None, i
     iters = 50
     prev_loss2 = 0
     count = 0
-    lamda = 0.05
+    lamda = 0.12
     start = time.time()
     lamda2 = -1
     comp = 0
@@ -117,7 +117,7 @@ def MAD(model_defence, model_attack, weight_attack, weight_defence,ref = None, i
             
         if comp > 0.5:
             #full_name = 'attention!'+'_'+full_name
-            #imshow(torch.clamp(y,0,1),None,'attention'+full_name)
+            imshow(torch.clamp(y,0,1),None,'attention'+full_name)
             fix = fix*0.8
             
        
@@ -200,7 +200,6 @@ if __name__ == '__main__':
     weight_gram = 1e3
     weight_mse = 1e3
     weight_ssim = 1e3
-    weight_tcnn = 1e3
 
     aim_grad = 0.015
     
@@ -229,7 +228,7 @@ if __name__ == '__main__':
         
         
             if Type == 'noise' :
-                imgn = gaussian_noise(float(level),ref_img,im_name)
+                imgn = gaussian_noise(float(level),ref_img)
             elif Type == 'blur' :
                 imgn = gaussian_blur(float(level),ref_img,im_name)
             elif Type == 'gamma':
@@ -267,11 +266,6 @@ if __name__ == '__main__':
             adjust = aim_grad/temp_grad
             weight_mse = adjust*weight_mse
 
-            _,g = model_tcnn(imgn,ref,weight_tcnn)
-            temp_grad = torch.mean(torch.abs(g))
-            adjust = aim_grad/temp_grad
-            weight_tcnn = adjust*weight_tcnn
-
 
             ##gd : gradient direction
             for gd in range(1,5):
@@ -283,13 +277,13 @@ if __name__ == '__main__':
                     suffix = Type+'_'+level+'_'+gd
                     full_name = method+'_'+im_name+'_'+suffix
                 
-                    model_attack = model_tcnn
-                    weight_attack = weight_tcnn
+                    model_attack = model_gram
+                    weight_attack = weight_gram
 
                     model_defence = ssim    #keep same
                     weight_defence = weight_ssim
                 
-                    MAD(model_defence, model_attack,weight_attack, weight_defence, ref , imgn, full_name, gd, 1000)
+                    MAD(model_defence, model_attack,weight_attack, weight_defence, ref , imgn, full_name, gd, 800)
  
             
                 else:
@@ -299,10 +293,10 @@ if __name__ == '__main__':
                     model_attack = ssim
                     weight_attack = weight_ssim
 
-                    model_defence = model_tcnn   #keep same
-                    weight_defence = weight_tcnn
+                    model_defence = model_gram   #keep same
+                    weight_defence = weight_gram
 
-                    MAD(model_defence, model_attack,weight_attack, weight_defence,ref , imgn, full_name, gd, 800)
+                    MAD(model_defence, model_attack,weight_attack, weight_defence,ref , imgn, full_name, gd, 400)
 
             #with open('loss'+ gd +'.pkl', 'wb') as f:
             #    pickle.dump(loss, f)

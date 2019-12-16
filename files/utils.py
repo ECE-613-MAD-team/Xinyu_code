@@ -80,13 +80,12 @@ def imshow1(tensor, title=None):
     plt.show()
 
 
-def gaussian_noise(level,ref,name):
+def gaussian_noise(level,ref):
 
     ref = ref * 255
     noise = torch.randn(1, nc, imsize, imsize) * torch.sqrt((torch.tensor([2.0]) ** level))
     imgn = (ref + noise.to(device)) / 255
     imgn = torch.clamp(imgn, 0, 1)
-    imshow(imgn, title=None,full_name = 'distorted image(noise)'+name)
 
     return imgn
 
@@ -97,7 +96,7 @@ def gaussian_blur(level,ref,name):
     temp = temp[...,::-1]
     temp = np.transpose(temp,(2,0,1))[np.newaxis,...]/255.0
     imgn = torch.from_numpy(temp).float().to(device)
-    imshow(imgn, title=None,full_name = 'distorted image(blur)'+name)
+    imshow(imgn, title=None,full_name = 'distorted image'+name)
 
     return imgn
 
